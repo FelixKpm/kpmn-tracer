@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import numpy as np
-
 from conftest import decode_index_frame, write_index_video
+
 from kpmn_tracer.io.decode import make_proxy
 from kpmn_tracer.io.probe import probe
 from kpmn_tracer.io.reader import FrameReader

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
@@ -71,8 +70,9 @@ def test_mask_improves_camera_tracking(person_clip, tmp_path: Path) -> None:
 
 
 def test_occlusion_in_export(person_clip, tmp_path: Path) -> None:
-    from kpmn_tracer.io.export import ExportSettings, export
     from verify_overlay import iter_frames
+
+    from kpmn_tracer.io.export import ExportSettings, export
 
     clip, truth, masks = person_clip
     sess = ClipSession.open(clip, cache_root=tmp_path)
