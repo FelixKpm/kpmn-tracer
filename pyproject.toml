@@ -14,3 +14,10 @@ addopts = "-ra"
 markers = [
     "slow: long running end-to-end tests (deselect with -m 'not slow')",
 ]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["kpmn_tracer*"]
