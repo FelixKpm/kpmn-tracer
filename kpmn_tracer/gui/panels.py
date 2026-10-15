@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QPushButton,
@@ -85,6 +86,9 @@ class ColorButton(QPushButton):
 
 class StylePanel(QGroupBox):
     changed = Signal()
+    presetChosen = Signal(str)
+    presetSave = Signal()
+    presetDelete = Signal()
 
     def __init__(self) -> None:
         super().__init__("Tracer-Style")
@@ -92,6 +96,21 @@ class StylePanel(QGroupBox):
         f = QFormLayout(self)
         self._setters: list[Callable[[], None]] = []
         self._building = False
+
+        prow = QGridLayout()
+        self.presets = QComboBox()
+        self.presets.setToolTip("Gespeicherte Styles")
+        self.presets.activated.connect(lambda _i: self.presetChosen.emit(self.presets.currentText()))
+        save = QPushButton("Speichern…")
+        save.setToolTip("Aktuellen Style als Preset speichern")
+        save.clicked.connect(self.presetSave.emit)
+        delete = QPushButton("Löschen")
+        delete.setToolTip("Eigenes Preset löschen")
+        delete.clicked.connect(self.presetDelete.emit)
+        prow.addWidget(self.presets, 0, 0, 1, 2)
+        prow.addWidget(save, 1, 0)
+        prow.addWidget(delete, 1, 1)
+        f.addRow("Preset", prow)
 
         self.color = ColorButton()
         self.color.colorChanged.connect(lambda c: self._set("color", c))
@@ -138,6 +157,14 @@ class StylePanel(QGroupBox):
         setattr(self.style_obj, attr, value)
         self.changed.emit()
 
+    def set_presets(self, names: list[str], current: str | None = None) -> None:
+        self.presets.blockSignals(True)
+        self.presets.clear()
+        self.presets.addItems(names)
+        if current and current in names:
+            self.presets.setCurrentText(current)
+        self.presets.blockSignals(False)
+
     def set_style(self, style: TracerStyle) -> None:
         self.style_obj = style
         self._building = True
@@ -147,6 +174,70 @@ class StylePanel(QGroupBox):
             self.mode.setCurrentIndex(max(0, self.mode.findData(style.mode)))
             for s in self._setters:
                 s()
+        finally:
+            self._building = False
+
+
+class TextPanel(QGroupBox):
+    """Text label of the current shot + global text style."""
+
+    changed = Signal()
+
+    def __init__(self) -> None:
+        super().__init__("Text-Einblendung")
+        from kpmn_tracer.render.text import TextStyle
+
+        self.text_style = TextStyle()
+        f = QFormLayout(self)
+        self.text = QLineEdit()
+        self.text.setPlaceholderText("z. B. 7-Eisen · 145 m  (leer = kein Text)")
+        self.text.editingFinished.connect(self._emit)
+        self.position = QComboBox()
+        for k, label in (("apex", "Am Apex"), ("land", "Am Landepunkt"), ("top_left", "Oben links"),
+                         ("top_right", "Oben rechts"), ("bottom_left", "Unten links"),
+                         ("bottom_right", "Unten rechts")):
+            self.position.addItem(label, k)
+        self.trigger = QComboBox()
+        self.trigger.addItem("nach dem Impact", "impact")
+        self.trigger.addItem("nach der Landung", "land")
+        self.delay = dspin(0, 10, 0.1, 1, " s")
+        self.size = dspin(10, 200, 2, 0, " px")
+        self.box = QCheckBox("Hintergrund-Box")
+        for w in (self.position, self.trigger):
+            w.currentIndexChanged.connect(lambda _i: self._emit())
+        for w in (self.delay, self.size):
+            w.valueChanged.connect(lambda _v: self._emit())
+        self.box.toggled.connect(lambda _v: self._emit())
+        f.addRow("Text (Schlag)", self.text)
+        f.addRow("Position", self.position)
+        f.addRow("Erscheint", self.trigger)
+        f.addRow("Verzögerung", self.delay)
+        f.addRow("Schriftgröße", self.size)
+        f.addRow(self.box)
+        self._building = False
+
+    def _emit(self) -> None:
+        if self._building:
+            return
+        ts = self.text_style
+        ts.position = self.position.currentData()
+        ts.trigger = self.trigger.currentData()
+        ts.delay_s = self.delay.value()
+        ts.size = self.size.value()
+        ts.box = self.box.isChecked()
+        self.changed.emit()
+
+    def load(self, text: str, enabled: bool, ts) -> None:
+        self._building = True
+        try:
+            self.text_style = ts
+            self.text.setText(text)
+            self.text.setEnabled(enabled)
+            self.position.setCurrentIndex(max(0, self.position.findData(ts.position)))
+            self.trigger.setCurrentIndex(max(0, self.trigger.findData(ts.trigger)))
+            self.delay.setValue(ts.delay_s)
+            self.size.setValue(ts.size)
+            self.box.setChecked(ts.box)
         finally:
             self._building = False
 
