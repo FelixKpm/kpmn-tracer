@@ -79,7 +79,8 @@ def test_detector_finds_bright_and_dark_movers_but_not_static_edges() -> None:
 def _clip(media_dir: Path, name: str, **kw):
     from synth import ShotSpec, SynthConfig, generate
 
-    spec_kw = {k: kw.pop(k) for k in ("hidden_intervals", "ball_visible_after_s", "drag", "side_accel") if k in kw}
+    spec_keys = ("hidden_intervals", "ball_visible_after_s", "drag", "side_accel", "start_xyz")
+    spec_kw = {k: kw.pop(k) for k in spec_keys if k in kw}
     spec = ShotSpec(impact_frame=15, velocity=(3, -22, 48), drag=spec_kw.pop("drag", 0.05),
                     side_accel=spec_kw.pop("side_accel", 0.8), **spec_kw)
     cfg = SynthConfig(width=960, height=540, fps=30, n_frames=150, shots=[spec], ref_frame=15,
@@ -153,3 +154,17 @@ def test_no_ball_falls_back_to_prefilled_manual(media_dir: Path, tmp_path: Path)
     assert shot.is_complete() and not shot.uses_anchor_times()
     assert [a.kind for a in shot.anchors] == [AnchorKind.START, AnchorKind.APEX, AnchorKind.LAND]
     assert "prüfen" in shot.label or "nicht gefunden" in shot.label
+
+
+def test_close_fast_launch_keeps_first_frames(media_dir: Path, tmp_path: Path) -> None:
+    """Ball close to the camera: huge screen speed right after impact must not be dropped as outliers."""
+    path, truth = _clip(media_dir, "auto_close", start_xyz=(0.0, 0.9, 2.0), drag=0.25)
+    shot, sess = _run(path, truth, tmp_path)
+    imp = truth["impact_frames"][0]
+    tr = _truth(truth, True)
+    first = [f for f in sorted(tr)[:3]]
+    p = shot.path()
+    for f in first:
+        assert np.linalg.norm(p.evaluate(shot.head_u(f, 30.0))[0] - tr[f]) < 6.0, f
+    assert shot_error_px(shot, tr, 30.0) <= 3.0
+    assert imp + 1 in first
