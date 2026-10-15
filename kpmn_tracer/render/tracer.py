@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 
 from kpmn_tracer.render.style import TracerStyle, hex_to_rgb
+from kpmn_tracer.render.text import TextStyle, draw_text
 from kpmn_tracer.trace.model import Shot
 
 log = logging.getLogger(__name__)
@@ -104,9 +105,11 @@ def _draw_dot(mask: np.ndarray, p: np.ndarray, r: float) -> None:
 
 
 class TracerRenderer:
-    def __init__(self, width: int, height: int, fps: float, style: TracerStyle) -> None:
+    def __init__(self, width: int, height: int, fps: float, style: TracerStyle,
+                 text_style: TextStyle | None = None) -> None:
         self.width, self.height, self.fps = width, height, fps
         self.style = style
+        self.text_style = text_style
         self.scale = style.scale_for(width, height)
 
     def margin(self) -> int:
@@ -132,6 +135,10 @@ class TracerRenderer:
             geo = shot_geometry(shot, frame, self.fps, self.style, self.scale)
             if geo is not None:
                 self._draw(out, geo, occlusion)
+        if self.text_style is not None:
+            for shot in shots:
+                if shot.text:
+                    draw_text(out, shot, frame, self.fps, self.text_style, self.style)
         return out
 
     # ------------------------------------------------------------------ internals
