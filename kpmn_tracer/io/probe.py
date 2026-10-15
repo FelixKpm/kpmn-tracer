@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -53,6 +53,7 @@ class VideoInfo:
     has_audio: bool
     audio_sample_rate: int | None
     frame_intervals_ms: dict[str, float] = field(default_factory=dict)
+    audio_start_time: float = 0.0  # absolute start of the audio stream (seconds)
 
     @property
     def width(self) -> int:
@@ -86,7 +87,8 @@ class VideoInfo:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> VideoInfo:
-        d = dict(d)
+        names = {f.name for f in fields(cls)}
+        d = {k: v for k, v in d.items() if k in names}
         for k in ("avg_fps", "r_fps", "target_fps"):
             d[k] = Fraction(d[k])
         return cls(**d)
@@ -168,6 +170,13 @@ def analyse_intervals(pts: np.ndarray) -> tuple[bool, dict[str, float]]:
     return is_vfr, stats
 
 
+def frame_times(path: str | Path) -> np.ndarray:
+    """Sorted absolute presentation times (s) of all video frames (cheap: no decoding)."""
+    pk = _run_json(["-select_streams", "v:0", "-show_entries", "packet=pts_time", str(path)])
+    return np.sort(np.array([float(p["pts_time"]) for p in pk.get("packets", [])
+                             if p.get("pts_time") not in (None, "N/A")]))
+
+
 def probe(path: str | Path) -> VideoInfo:
     path = Path(path)
     if not path.is_file():
@@ -225,6 +234,7 @@ def probe(path: str | Path) -> VideoInfo:
         has_audio=audio is not None,
         audio_sample_rate=int(audio["sample_rate"]) if audio and audio.get("sample_rate") else None,
         frame_intervals_ms=stats,
+        audio_start_time=float(audio.get("start_time") or 0.0) if audio else 0.0,
     )
     log.info("Probed %s: %s", path.name, info.summary())
     if info.is_vfr:
