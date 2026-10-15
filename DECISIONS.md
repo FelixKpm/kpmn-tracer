@@ -143,3 +143,50 @@ White-Top-Hat am Ballort relativ zum Klick-Frame. Anwesend ≈ 1,0, abwesend/Sch
 folgt langsamer Kamerabewegung per Phasenkorrelation auf einer 320-px-Verkleinerung.
 Fusion: Audio + Video innerhalb ±0,25 s → Audio-Frame (sample-genau); nur Audio, Ball blieb liegen →
 verworfen (Nachbarbox); nur Audio, Abschlagpunkt leer → Konfidenz 0,15; nur Video → 0,55.
+
+## D20 – Flugmodell: perspektivisch projizierte Parabel mit festem Startpunkt
+`x(t) = (Sx + a1·t + a2·t²)/(1 + c·t)`, `y` analog, gemeinsamer Nenner = linear wachsende Tiefe
+(Ball fliegt von der Kamera weg). Herleitung: luftwiderstandsfreie 3-D-Parabel durch eine Lochkamera.
+Vorteile gegenüber einer Bildschirm-Parabel: erklärt das starke Abbremsen im Bild (156 → 86 → 54
+px/Frame direkt nach dem Abflug), extrapoliert stabil, ist nach Multiplikation mit dem Nenner linear
+(RANSAC mit 3 Punkten), Landezeitpunkt analytisch (Ball wieder auf Bodenhöhe:
+`t = (cy·c − b1)/b2`). Luftwiderstand/Auftrieb sind nicht modelliert – deshalb D23.
+
+## D21 – Kandidaten: Differenz zu *beiden* Nachbarn, beide Polaritäten, Gradienten-Toleranz
+`min(f − (f−k), f − (f+k))` lässt nur Dinge übrig, die in *f* auftauchen und in beiden Nachbarn
+fehlen (bewegter Ball), statische Struktur und Rauschen heben sich auf. Gespiegelt für dunkle Bälle
+vor hellem Himmel (im echten Clip wechselt die Polarität beim Übergang Rasen → Himmel). Nach dem
+Warpen erzeugen Kanten (Baumreihe!) durch Rest-Fehlregistrierung Differenzen proportional zum
+Gradienten; die Schwelle wird deshalb lokal um `0,6 px × Gradient` angehoben: Fehlkandidaten pro
+Frame von ~450 auf < 10. Pixel außerhalb eines der drei Quellbilder werden ignoriert.
+
+## D22 – Initialisierung mit mehreren Abflug-Hypothesen
+Beim Impact verlassen mehrere Dinge den Ballort (Ball, Schlägerkopf, Divot). Ein einzelnes RANSAC
+wählte im echten Clip den Schlägerkopf (zwei Blobs pro Frame = doppelte Inlier). Jetzt: Inlier
+zählen pro *Frame*, Ziehen gewichtet nach Kontrast und Größenähnlichkeit zum ruhenden Ball, bis zu 6
+unterschiedliche Hypothesen werden verfolgt, gewonnen hat die längste, dichteste, glatteste Bahn
+(der Schlägerkopf beschreibt einen Kreisbogen und fällt aus dem Modell).
+
+## D23 – Finale Flugbahn: Glättungsspline (beobachtet) + perspektivisches Modell (Extrapolation)
+Bei starkem Luftwiderstand weicht das globale Modell im beobachteten Teil bis 8 px ab, obwohl die
+Detektionen auf ~0,15 px genau sind. Deshalb: im beobachteten Bereich ein Glättungsspline mit
+GCV-gewählter Stärke (überbrückt Lücken, entfernt Jitter), danach das zum Flugende hin gewichtete
+Modell, stetig angeschlossen, bis zur geschätzten Landung. Das Ergebnis wird als Anker mit Zeiten in
+die normale `Shot`-Struktur geschrieben (dicht direkt nach dem Impact, dann alle ~0,1 s); „Vereinfachen“
+reduziert es auf Start/Apex/Landung mit passend gewählter Easing-Kurve.
+
+## D24 – Konfidenz und Rückfall in den manuellen Modus
+Konfidenz = Anzahl Detektionen × beobachtete Dauer (≥ 0,8 s) × √Abdeckung × Fit-Qualität. Unter 0,5
+wird der Schlag mit Start, geschätztem Apex und geschätzter Landung *ohne* Zeiten vorbefüllt (manuelles
+Timing), ohne Fund mit einer typischen Kurvenform ab dem Startpunkt.
+
+## D25 – Echtclip-Prüfung (CC0-Video von Wikimedia Commons, `tools/real_clip_check.py`)
+Zeitlupen-Zusammenschnitt einer Range-Session, Hochformat, VFR, Ton nicht nutzbar.
+* Ball-Tracking eines echten Schlags (Impact + Startklick): 109 Detektionen über 156 Frames,
+  Konfidenz 0,84, Tracer sitzt glatt auf dem Ball (Polaritätswechsel vor dem Himmel funktioniert).
+* Reine Video-Impact-Erkennung liefert dort Fehlalarme (Schläger beim Ansprechen über dem Ball,
+  herangerollter Ball, Kameraschwenk, Schnitt). Ein Video-Kandidat wird nur bestätigt, wenn vorher ein
+  Ball 0,5 s stabil an der Stelle lag *und* ein verfolgbarer, steigender Flug (≥ 8 Detektionen,
+  ≥ 0,4 s) folgt; Kamera dabei mit dem Phase-2-Tracker kompensiert. Das senkt die Fehlalarme von 9 auf
+  1, verpasst aber in diesem Clip den echten Schlag. Video-only-Kandidaten bekommen daher höchstens
+  0,55, unbestätigte 0,2. Bei normalen iPhone-Clips ist der Ton der Hauptpfad.

@@ -6,7 +6,7 @@
 | 2 – Handheld: Kamerabewegung kompensieren | ✅ fertig |
 | 3 – Personen-Maske | ✅ fertig |
 | 4 – Automatische Impact-Erkennung | ✅ fertig |
-| 5 – Automatisches Ball-Tracking | ⏳ offen |
+| 5 – Automatisches Ball-Tracking | ✅ fertig |
 | 6 – Optional: ML-Ballerkennung | ⏳ offen |
 | 7 – Workflow & Komfort | ⏳ offen |
 | 8 – Packaging & Doku | ⏳ offen |
@@ -82,11 +82,32 @@ Fremdschlag-Geräuschen: alle 3 Impacts exakt (±0 Frames, gefordert ±1), Fremd
 Ball verworfen, die anderen mit Konfidenz 0,15. Zusätzlich: nur Audio, nur Video (ohne Tonspur), 60
 und 120 fps, VFR-Zeitzuordnung.
 
+## Phase 5 – erledigt
+- `ball/flightfit.py`: perspektivisches Flugmodell, RANSAC + robuste Nachoptimierung, Apex, Landung.
+- `ball/candidates.py`: `BallDetector`-Interface + `ClassicDetector` (stabilisierte ROI, Differenz zu
+  f±k, beide Polaritäten, Gradienten-Toleranz, Blob-Filter, Personenmaske).
+- `ball/tracker.py`: Mehrhypothesen-Initialisierung, Verfolgung mit wachsendem Suchfenster und
+  Lückenüberbrückung, globaler Fit + Nachsuche entlang der Kurve.
+- `ball/auto.py`: finale Flugbahn (Spline + Extrapolation), Konfidenz, Überführung in Anker mit
+  Zeiten bzw. vorbefüllter manueller Modus.
+- `analysis.py`: Pipeline pro Schlag (Maske → Kamera → Ball) und pro Clip (Impacts → Schläge).
+- GUI: „Ball tracken (B)“, „Ganzen Clip analysieren“, „Vereinfachen“.
+- Impact-Erkennung: Video-Kandidaten brauchen einen bestätigten Abflug (siehe D25).
+
+**Abnahme:** `tests/test_ball_tracking.py` – synthetische Clips (Stativ, Handheld, Ball 1–4 px, Lücke
+von 0,5 s, Ball ab 2 s unsichtbar, schwacher Kontrast), Startpunkt absichtlich 1,8 px daneben
+geklickt: mittlerer Fehler des gerenderten Tracer-Kopfs 0,1–0,5 px (gefordert ≤ 3 px), Landezeit
+±6 %. Echter Clip (D25): Ball eines echten Schlags sauber verfolgt (Konfidenz 0,84).
+
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.
 - Masken werden für lange Bereiche komplett in den Speicher geladen (~230 KB/Key-Frame); für
   Schlag-Bereiche unkritisch.
 - Impact-Erkennung per Video setzt einen hellen Ball voraus (Range-Bälle sind weiß/gelb); der
   Abschlagpunkt sollte zwischen den Schlägen gleich bleiben (Matte/Tee).
-- Die GUI-Screenshots/Tests laufen im Offscreen-Modus; echte iPhone-Clips wurden noch nicht getestet
-  (keine Testclips im Repo).
+- Video-only-Impact-Erkennung ist auf echtem Material (ohne Ton) noch unzuverlässig (D25); mit Ton
+  bzw. per Klick auf den Schlag funktioniert der Ablauf.
+- Starker Luftwiderstand/Auftrieb wird nur im beobachteten Teil exakt wiedergegeben; die
+  Extrapolation nach dem Verschwinden des Balls ist eine Schätzung (Landepunkt zum Nachkorrigieren).
+- Die GUI-Screenshots/Tests laufen im Offscreen-Modus; echte iPhone-Clips des Nutzers wurden noch nicht
+  getestet (nur ein CC0-Clip, siehe D25).

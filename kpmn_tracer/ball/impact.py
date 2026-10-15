@@ -12,8 +12,10 @@ tracer starts there.
 * Fusion: audio and video events within ``match_window_s`` are merged (audio
   frame wins, it is sample-accurate). Audio-only events are dropped when the
   video clearly saw the ball resting there before *and* after (a hit from the
-  next bay) and get a very low confidence when the spot was empty; video-only
-  events are kept with lower confidence.
+  next bay) and get a very low confidence when the spot was empty. Video-only
+  events need a confirmed take-off (ball tracker launch hypothesis rising from
+  the spot); otherwise the club at address, a ball rolled into place or a
+  camera move would count as impacts.
 """
 
 from __future__ import annotations
@@ -170,6 +172,66 @@ def video_impacts(ncc: np.ndarray, fps: float, p: ImpactParams) -> list[int]:
     return out
 
 
+# ---------------------------------------------------------------- launch check
+def launch_seen(reader: FrameReader, frame: int, ball_xy: tuple[float, float], ball_r: float,
+                fps: float) -> int | None:
+    """Does a ball really fly away from ``ball_xy`` around ``frame``? Returns the impact frame.
+
+    The camera over the next 1.5 s is tracked with the phase-2 tracker (robust to
+    the moving golfer; tripods are detected and skipped), then the ball tracker
+    runs from ``frame - 1`` and ``frame``. A club head, a body part or a ball
+    rolled into place may form a short launch hypothesis, but only a real ball
+    yields a long, smooth, rising flight: >= 8 detections over >= 0.4 s and a
+    clear rise. Large camera motion (or a cut) is never confirmed.
+    """
+    from kpmn_tracer.ball.candidates import ClassicDetector
+    from kpmn_tracer.ball.tracker import BallTracker, BallTrackParams
+    from kpmn_tracer.camera.homography import corner_displacement
+    from kpmn_tracer.camera.tracker import CameraTracker
+
+    n = len(reader)
+    size = (reader.width, reader.height)
+    # a ball must rest stably at the spot before the impact (the club head may
+    # already touch it in the last frames): found in >= 60 % of the last 0.5 s,
+    # always at the same place
+    look = range(frame - 1, max(-1, frame - 1 - int(0.5 * fps)), -1)
+    found = []
+    for f in look:
+        loc = locate_ball(reader.gray(f), ball_xy, search_r=max(12.0, 4 * ball_r))
+        if loc is not None and loc[2] >= 1.0:
+            found.append(loc)
+    if len(found) < 0.6 * len(look):
+        return None
+    arr = np.array(found)
+    med = np.median(arr, axis=0)
+    if np.median(np.hypot(arr[:, 0] - med[0], arr[:, 1] - med[1])) > max(1.5, 0.25 * med[2]):
+        return None
+    ball_xy, ball_r = (float(med[0]), float(med[1])), float(med[2])
+    first, end = max(0, frame - 1), min(n - 1, frame + int(1.5 * fps))
+    cam = CameraTracker(reader.gray, size).track(frame, first, end)
+    if cam.mode == "tracked":
+        moved = max(corner_displacement(cam.H(f), *size) for f in range(first, end + 1))
+        if moved > 0.08 * max(size) or np.mean(cam.confidence < 0.5) > 0.2:
+            return None
+
+    def H(f: int) -> np.ndarray:
+        return cam.H(min(max(f, first), end))
+
+    det = ClassicDetector(reader.gray, H, size, end + 1)
+    for f0 in (frame - 1, frame):
+        if f0 < first:
+            continue
+        params = BallTrackParams(max_flight_s=1.5, max_gap_s=0.3)
+        tr = BallTracker(det, size, fps, end + 1, params).track(f0, ball_xy, ball_r)
+        if tr is None or len(tr.points) < 8 or tr.fit is None or tr.fit.rms > 1.5:
+            continue
+        span = (max(tr.points) - f0) / fps
+        rise = ball_xy[1] - min(c.y for c in tr.points.values())
+        if span >= 0.4 and rise > max(6 * ball_r, 0.02 * reader.height):
+            return f0
+    return None
+
+
 # ---------------------------------------------------------------- fusion
 def detect_impacts(
     session: ClipSession,
@@ -199,6 +261,7 @@ def detect_impacts(
 
     # --- video
     vid: list[int] = []
+    launched: dict[int, int] = {}  # video impact -> impact frame confirmed by a take-off
     ncc = None
     ball_src = None
     if ball_hint is not None:
@@ -214,9 +277,14 @@ def detect_impacts(
                 bx, by, br = loc
                 br = p.ball_radius or br
                 ball_src = tuple(session.proxy_to_source(np.array([[bx, by]]))[0])
-                ncc, _ = presence_signal(reader, (bx, by), br, hf, p,
-                                         lambda f: report(0.1 + 0.85 * f), cancel)
+                ncc, centres = presence_signal(reader, (bx, by), br, hf, p,
+                                               lambda f: report(0.1 + 0.8 * f), cancel)
                 vid = video_impacts(ncc, fps, p)
+                launched = {}
+                for v in vid:
+                    f0 = launch_seen(reader, v, tuple(centres[v]), br, fps)
+                    if f0 is not None:
+                        launched[v] = f0
     report(0.95)
 
     # --- fusion
@@ -230,8 +298,9 @@ def detect_impacts(
             used_video.add(v)
             # audio is sample accurate; trust video only if they disagree by > 2 frames
             frame = fa if abs(v - fa) <= 2 else v
+            src = ["audio", "video"] + (["launch"] if v in launched else [])
             out.append(ImpactCandidate(frame, float(times[frame]), min(1.0, 0.6 + 0.4 * strength),
-                                       ["audio", "video"], ball_src))
+                                       src, ball_src))
         elif ncc is not None and _ball_stays(ncc, fa, win, p):
             log.info("Audio transient at %.2fs ignored: ball did not move", t)
         elif ncc is not None and _spot_empty(ncc, fa, win, p):
@@ -241,7 +310,12 @@ def detect_impacts(
             out.append(ImpactCandidate(fa, t, 0.25 + 0.35 * strength, ["audio"], ball_src))
     for v in vid:
         if v not in used_video:
-            out.append(ImpactCandidate(v, float(times[v]), 0.55, ["video"], ball_src))
+            # without sound only a visible take-off makes a reliable impact
+            if v in launched:
+                f0 = launched[v]
+                out.append(ImpactCandidate(f0, float(times[f0]), 0.55, ["video", "launch"], ball_src))
+            else:
+                out.append(ImpactCandidate(v, float(times[v]), 0.2, ["video"], ball_src))
     out.sort(key=lambda c: c.frame)
     report(1.0)
     log.info("Impacts: %s", [(c.frame, "+".join(c.sources)) for c in out])

@@ -86,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
     ap = build_parser()
     a = ap.parse_args(argv)
     if a.cmd is None:

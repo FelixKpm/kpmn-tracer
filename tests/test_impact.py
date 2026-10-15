@@ -89,7 +89,7 @@ def test_all_impacts_found_within_one_frame(range_session) -> None:
     assert len(good) == 3
     for c, f in zip(good, truth["impact_frames"]):
         assert abs(c.frame - f) <= 1, (c.frame, f)
-        assert c.sources == ["audio", "video"]
+        assert c.sources[:2] == ["audio", "video"]
     # the foreign hit while our ball was resting (6.7 s = frame 201) is not reported at all
     assert not any(abs(c.frame - 201) <= 3 for c in cands)
 
@@ -111,7 +111,7 @@ def test_video_only_clip_without_audio(media_dir: Path, tmp_path: Path) -> None:
     truth = generate(cfg, media_dir, "silent")
     sess = ClipSession.open(media_dir / "silent.mp4", cache_root=tmp_path)
     cands = detect_impacts(sess, tuple(truth["frames"][0]["balls"][0]["frame"]), 0)
-    assert [c.sources for c in cands] == [["video"], ["video"]]
+    assert [c.sources for c in cands] == [["video", "launch"], ["video", "launch"]]
     for c, f in zip(cands, truth["impact_frames"]):
         assert abs(c.frame - f) <= 1
 

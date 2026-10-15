@@ -226,6 +226,7 @@ class MainWindow(QMainWindow):
         act(editm, "Ausgewählten Punkt löschen", self.delete_selected, QKeySequence.StandardKey.Delete)
         act(editm, "Kamera tracken", lambda: self.track_camera(False), "T")
         act(editm, "Impacts erkennen", self.detect_impacts, "D")
+        act(editm, "Ball automatisch tracken", self.auto_track_shot, "B")
         for key, text, sc, _tip in TOOLS:
             act(editm, f"Werkzeug: {text}", lambda _c=False, k=key: self.set_tool(k), sc)
         act(viewm, "Ansicht einpassen", self.view.reset_view, "F")
@@ -268,6 +269,9 @@ class MainWindow(QMainWindow):
         sp.detectImpacts.connect(self.detect_impacts)
         sp.adoptCandidate.connect(self.adopt_candidate)
         sp.adoptAll.connect(self.adopt_all_candidates)
+        sp.autoTrack.connect(self.auto_track_shot)
+        sp.analyzeClip.connect(self.analyze_whole_clip)
+        sp.simplify.connect(self.simplify_shot)
         self.timeline.markerClicked.connect(lambda m: self.goto(int(m.frame)))
         self.style_panel.changed.connect(self.on_style_changed)
 
@@ -898,6 +902,95 @@ class MainWindow(QMainWindow):
         p.shots.sort(key=lambda s: s.impact_frame)
         self.shot_idx = 0
         self.statusBar().showMessage(f"{len(new)} Schläge angelegt", 4000)
+        self.on_project_changed()
+
+    # ================================================================ auto tracking
+    def _run_task(self, title: str, fn, done) -> None:
+        prog = QProgressDialog(title, "Abbrechen", 0, 1000, self)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+        prog.setMinimumDuration(300)
+        task = self.tasks.start(fn)
+        task.progress.connect(lambda f: prog.setValue(int(f * 1000)))
+        prog.canceled.connect(task.cancel)
+        task.finished.connect(lambda r: (prog.close(), done(r)))
+        task.failed.connect(lambda msg: (prog.close(), QMessageBox.warning(self, title.rstrip(" …"), msg)))
+        task.cancelled.connect(prog.close)
+
+    def auto_track_shot(self) -> None:
+        shot, sess = self.current_shot(), self.session
+        if shot is None or sess is None:
+            self.statusBar().showMessage("Erst einen Schlag anlegen (N) und den Ball markieren", 4000)
+            return
+        if shot.anchor(AnchorKind.START) is None and sess.project.ball_start_hint is None:
+            QMessageBox.information(self, "Ball tracken", "Bitte im Impact-Frame zuerst mit „Start“ auf den Ball klicken.")
+            return
+        from kpmn_tracer.analysis import AnalysisOptions, analyze_shot
+
+        work = Shot.from_dict(shot.to_dict())  # analyse a copy; apply on success (undo-able)
+        opts = AnalysisOptions(use_person_mask=bool(sess.project.settings.get("use_person_mask", True)))
+
+        def done(result) -> None:
+            if shot not in sess.project.shots:
+                return
+            self._snapshot()
+            idx = sess.project.shots.index(shot)
+            sess.project.shots[idx] = work
+            self._masks = None
+            from kpmn_tracer.segmentation.provider import load_masks
+
+            self._masks = load_masks(sess)
+            if result is None:
+                msg = "Ball nicht gefunden – Punkte vorbefüllt, bitte von Hand setzen"
+            elif result.confidence < 0.5:
+                msg = f"Unsicher ({result.confidence:.0%}) – Start/Apex/Landung vorbefüllt, bitte prüfen"
+            else:
+                msg = f"Ball getrackt: {result.n_detections} Detektionen, Konfidenz {result.confidence:.0%}"
+            self.statusBar().showMessage(msg, 8000)
+            self.shot_panel.auto_status.setText(msg)
+            self.set_tool("select")
+            self.on_project_changed()
+
+        self._run_task("Ball wird getrackt …",
+                       lambda pr, cancel: analyze_shot(sess, work, opts, pr, cancel), done)
+
+    def analyze_whole_clip(self) -> None:
+        sess = self.session
+        if sess is None:
+            return
+        from kpmn_tracer.analysis import AnalysisOptions, analyze_clip
+
+        hint, hint_frame = self._ball_hint()
+        if hint is None:
+            QMessageBox.information(self, "Clip analysieren",
+                                    "Bitte zuerst in einem Frame mit ruhendem Ball einen Schlag anlegen (N) "
+                                    "und mit „Start“ auf den Ball klicken.")
+            return
+        opts = AnalysisOptions(use_person_mask=bool(sess.project.settings.get("use_person_mask", True)))
+        self._snapshot()
+
+        def done(new) -> None:
+            from kpmn_tracer.segmentation.provider import load_masks
+
+            self._masks = load_masks(sess)
+            # drop the helper shot used only to mark the ball if it has no landing
+            sess.project.shots = [s for s in sess.project.shots if s.is_complete() or s in new]
+            ok = sum((s.confidence or 0) >= 0.5 for s in new)
+            msg = f"{len(new)} Schläge analysiert, {ok} sicher"
+            self.statusBar().showMessage(msg, 8000)
+            self.shot_panel.auto_status.setText(msg)
+            self.shot_idx = 0 if sess.project.shots else -1
+            self.on_project_changed()
+
+        self._run_task("Clip wird analysiert …",
+                       lambda pr, cancel: analyze_clip(sess, hint, hint_frame, opts, progress=pr, cancel=cancel),
+                       done)
+
+    def simplify_shot(self) -> None:
+        shot, p = self.current_shot(), self.project
+        if shot is None or p is None or not shot.is_complete():
+            return
+        self._snapshot()
+        shot.simplify(p.fps)
         self.on_project_changed()
 
     # ================================================================ save / export
