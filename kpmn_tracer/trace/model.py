@@ -137,6 +137,27 @@ class Shot:
         apex = next((i for i, a in enumerate(self.anchors) if a.kind == AnchorKind.APEX), None)
         return FlightPath.build(pts, apex, self.shape.launch_steepness, self.shape.descent_steepness)
 
+    def simplify(self, fps: float) -> None:
+        """Reduce (auto) anchors to start/apex/landing with manual timing, keeping the shape."""
+        if not self.is_complete():
+            return
+        dur = self.flight_frames(fps)
+        keep = [a for a in self.anchors if a.kind != AnchorKind.POINT]
+        if self.anchor(AnchorKind.APEX) is None and len(self.anchors) > 2:
+            top = min(self.anchors[1:-1], key=lambda a: a.y)
+            top.kind = AnchorKind.APEX
+            keep = [a for a in self.anchors if a.kind != AnchorKind.POINT]
+        apex = self.anchor(AnchorKind.APEX)
+        if apex is not None and apex.t is not None and dur > 0:
+            # choose the easing so the ball still reaches the apex at the measured time
+            self.timing = _fit_easing(self, apex.t / dur)
+        for a in keep:
+            a.t = None
+        self.anchors = keep
+        self.land_frame = self.impact_frame + dur
+        self.shape = PathShape()
+        self.source = "manual"
+
     # ------------------------------------------------------------ timing
     def uses_anchor_times(self) -> bool:
         ts = [a.t for a in self.anchors]
@@ -235,6 +256,22 @@ class Shot:
             confidence=d.get("confidence"),
             confirmed=bool(d.get("confirmed", False)),
         )
+
+
+def _fit_easing(shot: Shot, tau_apex: float) -> EasingTiming:
+    """Easing whose u(tau_apex) equals the apex knot of the simplified 3-point path."""
+    pts = [a for a in shot.anchors if a.kind != AnchorKind.POINT]
+    P = np.array([(a.x, a.y) for a in pts], float)
+    seg = np.linalg.norm(np.diff(P, axis=0), axis=1)
+    u_apex = seg[0] / max(seg.sum(), 1e-9) if len(seg) > 1 else 0.5
+    best, best_err = EasingTiming(), np.inf
+    for boost in np.linspace(0.0, 8.0, 33):
+        for late in (0.0, 0.4, 0.8, 1.2):
+            e = EasingTiming(float(boost), 0.12, late)
+            err = abs(float(e.u_at(tau_apex)[0]) - u_apex)
+            if err < best_err:
+                best, best_err = e, err
+    return best
 
 
 def scaled_shot(shot: Shot, sx: float, sy: float) -> Shot:
