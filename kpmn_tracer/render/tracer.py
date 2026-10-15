@@ -49,13 +49,13 @@ def shot_geometry(shot: Shot, frame: int, fps: float, style: TracerStyle, scale:
             alpha *= 1.0 - (after - style.hold_seconds) / max(style.fade_out_seconds, 1e-6)
     if alpha <= 0:
         return None
-    u_head = float(shot.u_at_tau(min(tau, 1.0), path)[0])
+    u_head = float(shot.u_at_tau(min(tau, 1.0), path, dur)[0])
     u_tail = 0.0
     if style.mode == "tail":
         tail_tau = tau - style.tail_seconds * fps / dur
         if tail_tau >= 1.0:
             return None
-        u_tail = float(shot.u_at_tau(max(tail_tau, 0.0), path)[0])
+        u_tail = float(shot.u_at_tau(max(tail_tau, 0.0), path, dur)[0])
     if u_head - u_tail < 1e-4:
         if tau >= 1.0:
             return None
