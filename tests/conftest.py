@@ -80,3 +80,19 @@ def person_clip(media_dir: Path) -> tuple[Path, dict, np.ndarray]:
     truth = generate(cfg, media_dir, "person")
     masks = np.load(media_dir / "person.masks.npz")["masks"]
     return media_dir / "person.mp4", truth, masks
+
+
+@pytest.fixture(scope="session")
+def range_session_gui(media_dir: Path, tmp_path_factory: pytest.TempPathFactory):
+    """Three-shot range clip with audio and club (shared by GUI tests)."""
+    from synth import ShotSpec, SynthConfig, generate
+
+    from kpmn_tracer.session import ClipSession
+
+    shots = [ShotSpec(impact_frame=30), ShotSpec(impact_frame=120, placed_frame=90),
+             ShotSpec(impact_frame=216, placed_frame=195)]
+    cfg = SynthConfig(width=640, height=360, fps=30, n_frames=270, shots=shots, ref_frame=0, audio=True,
+                      club=True, audio_distractors=[2.2])
+    truth = generate(cfg, media_dir, "range_gui")
+    sess = ClipSession.open(media_dir / "range_gui.mp4", cache_root=tmp_path_factory.mktemp("c"))
+    return sess, truth

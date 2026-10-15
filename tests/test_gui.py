@@ -179,3 +179,25 @@ def test_occlusion_preview(app: QApplication, person_clip, tmp_path: Path) -> No
     assert w._overlay_buf[..., 3][inner].max() <= 3
     w.dirty = False
     w.close()
+
+
+def test_impact_detection_in_gui(app: QApplication, range_session_gui) -> None:
+    from kpmn_tracer.gui.main_window import MainWindow
+
+    sess, truth = range_session_gui
+    w = MainWindow()
+    w.set_session(sess)
+    ball = truth["frames"][0]["balls"][0]["frame"]
+    sess.project.ball_start_hint = tuple(ball)
+    w.goto(0)
+    w.detect_impacts()
+    wait_until(app, lambda: not w.tasks.busy() and w.candidates(), 120)
+    assert sum(c.confidence >= 0.5 for c in w.candidates()) == 3
+    assert sum(m.shape == "triangle" for m in w.timeline.markers) >= 3
+    w.adopt_all_candidates()
+    assert [s.impact_frame for s in w.project.shots] == truth["impact_frames"]
+    for s in w.project.shots:
+        a = s.anchor(AnchorKind.START)
+        assert a is not None and abs(a.x - ball[0]) < 1.5 and abs(a.y - ball[1]) < 1.5
+    w.dirty = False
+    w.close()

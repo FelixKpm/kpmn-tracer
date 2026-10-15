@@ -164,6 +164,9 @@ class ShotPanel(QWidget):
     clearOffsets = Signal()
     paramsChanged = Signal()
     trackCamera = Signal(bool)  # force tracking (skip tripod detection)
+    detectImpacts = Signal()
+    adoptCandidate = Signal()
+    adoptAll = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -213,6 +216,24 @@ class ShotPanel(QWidget):
         self.hint.setStyleSheet("color:#aaa;")
         tl.addWidget(self.hint, 3, 0, 1, 2)
         lay.addWidget(tbox)
+
+        abox = QGroupBox("Automatik")
+        al = QGridLayout(abox)
+        for i, (text, sig, tip) in enumerate((
+            ("Impacts erkennen (D)", self.detectImpacts,
+             "Schläge über Audio (Schlaggeräusch) und Video (Ball verlässt den Abschlagpunkt) finden"),
+            ("Kandidat übernehmen", self.adoptCandidate, "Nächsten Kandidaten zum aktuellen Frame als Schlag anlegen"),
+            ("Alle sicheren übernehmen", self.adoptAll, "Alle Kandidaten mit Konfidenz ≥ 50 % als Schläge anlegen"),
+        )):
+            b = QPushButton(text)
+            b.setToolTip(tip)
+            b.clicked.connect(sig.emit)
+            al.addWidget(b, i // 2, i % 2)
+        self.auto_status = QLabel("Tipp: zuerst den Ball mit „Start“ markieren – dann wird auch das Video ausgewertet.")
+        self.auto_status.setWordWrap(True)
+        self.auto_status.setStyleSheet("color:#aaa;")
+        al.addWidget(self.auto_status, 2, 0, 1, 2)
+        lay.addWidget(abox)
 
         cbox = QGroupBox("Kamera")
         cl = QGridLayout(cbox)

@@ -60,6 +60,34 @@ class ClipSession:
             project.frame_count = proxy.frame_count
         return cls(project, FrameReader(proxy.path), cache)
 
+    # ------------------------------------------------------------ timing
+    def frame_times(self) -> np.ndarray:
+        """Absolute source time (s) of each normalised frame (cached in the cache dir).
+
+        ``frames`` mode keeps every source frame, so these are the real (possibly
+        irregular) timestamps; ``resample`` mode uses the constant output rate.
+        """
+        p = self.project
+        start = p.video.start_time
+        if p.vfr_mode == "resample" or not p.video.is_vfr:
+            return start + np.arange(p.frame_count) / p.fps
+        cache = self.cache_dir / "frame_times.npy"
+        if cache.exists():
+            t = np.load(cache)
+        else:
+            from kpmn_tracer.io.probe import frame_times
+
+            t = frame_times(p.source)
+            np.save(cache, t)
+        if len(t) != p.frame_count:  # should not happen; fall back to nominal timing
+            return start + np.arange(p.frame_count) / p.fps
+        return t
+
+    def time_to_frame(self, t: float) -> int:
+        """Frame being shown at absolute time ``t`` (last frame with pts <= t)."""
+        ft = self.frame_times()
+        return int(np.clip(np.searchsorted(ft, t + 1e-6, side="right") - 1, 0, len(ft) - 1))
+
     # ------------------------------------------------------------ coordinates
     def proxy_to_source(self, pts: np.ndarray) -> np.ndarray:
         pts = np.asarray(pts, float).reshape(-1, 2)

@@ -5,7 +5,7 @@
 | 1 – Fundament: Import, Vorschau, manueller Tracer, Export | ✅ fertig |
 | 2 – Handheld: Kamerabewegung kompensieren | ✅ fertig |
 | 3 – Personen-Maske | ✅ fertig |
-| 4 – Automatische Impact-Erkennung | ⏳ offen |
+| 4 – Automatische Impact-Erkennung | ✅ fertig |
 | 5 – Automatisches Ball-Tracking | ⏳ offen |
 | 6 – Optional: ML-Ballerkennung | ⏳ offen |
 | 7 – Workflow & Komfort | ⏳ offen |
@@ -66,9 +66,27 @@ Stativ-Erkennung.
 bewegter „Person“: Kamera-Fehler ohne Maske ≈ 13 px, mit Maske ≈ 0,03 px. Okklusion im ProRes-Export
 und in der GUI-Vorschau geprüft (Alpha im Personenbereich 0, außerhalb unverändert).
 
+## Phase 4 – erledigt
+- `ball/audio_onsets.py`: Transienten-Erkennung (Hochpass, Log-Energie, Anstieg + Prominenz,
+  Mindestabstand, sample-genaue Onset-Zeit).
+- `ball/impact.py`: Ball-Lokalisierung (Top-Hat-Blob nahe Hinweis), Präsenz-Signal über den ganzen
+  Clip, Übergänge anwesend → dauerhaft abwesend, Fusion mit Audio, mehrere Schläge pro Clip.
+- `ClipSession.frame_times()/time_to_frame()`: exakte Zeit→Frame-Zuordnung, auch bei VFR.
+- GUI: „Impacts erkennen (D)“, Kandidaten als Magenta-Marker in der Timeline (anklickbar),
+  „Kandidat übernehmen“ / „Alle sicheren übernehmen“ (legt Schläge mit lokalisiertem Startpunkt an),
+  Impact verschieben über „Impact = Frame“.
+- Generator: Schlägerkopf, der beim Impact durch den Ball fährt; Fremdgeräusche aus der Nachbarbox.
+
+**Abnahme:** `tests/test_impact.py` – Clip mit 3 Schlägen, Schläger, Kamerawackeln und 3
+Fremdschlag-Geräuschen: alle 3 Impacts exakt (±0 Frames, gefordert ±1), Fremdgeräusch bei ruhendem
+Ball verworfen, die anderen mit Konfidenz 0,15. Zusätzlich: nur Audio, nur Video (ohne Tonspur), 60
+und 120 fps, VFR-Zeitzuordnung.
+
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.
 - Masken werden für lange Bereiche komplett in den Speicher geladen (~230 KB/Key-Frame); für
   Schlag-Bereiche unkritisch.
+- Impact-Erkennung per Video setzt einen hellen Ball voraus (Range-Bälle sind weiß/gelb); der
+  Abschlagpunkt sollte zwischen den Schlägen gleich bleiben (Matte/Tee).
 - Die GUI-Screenshots/Tests laufen im Offscreen-Modus; echte iPhone-Clips wurden noch nicht getestet
   (keine Testclips im Repo).
