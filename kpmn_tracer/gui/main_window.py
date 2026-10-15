@@ -916,6 +916,13 @@ class MainWindow(QMainWindow):
         task.failed.connect(lambda msg: (prog.close(), QMessageBox.warning(self, title.rstrip(" …"), msg)))
         task.cancelled.connect(prog.close)
 
+    def _analysis_options(self):
+        from kpmn_tracer.analysis import AnalysisOptions
+
+        st = self.session.project.settings if self.session else {}
+        return AnalysisOptions(use_person_mask=bool(st.get("use_person_mask", True)),
+                               detector=st.get("detector", "classic"), yolo_model=st.get("yolo_model"))
+
     def auto_track_shot(self) -> None:
         shot, sess = self.current_shot(), self.session
         if shot is None or sess is None:
@@ -927,7 +934,7 @@ class MainWindow(QMainWindow):
         from kpmn_tracer.analysis import AnalysisOptions, analyze_shot
 
         work = Shot.from_dict(shot.to_dict())  # analyse a copy; apply on success (undo-able)
-        opts = AnalysisOptions(use_person_mask=bool(sess.project.settings.get("use_person_mask", True)))
+        opts = self._analysis_options()
 
         def done(result) -> None:
             if shot not in sess.project.shots:
@@ -965,7 +972,7 @@ class MainWindow(QMainWindow):
                                     "Bitte zuerst in einem Frame mit ruhendem Ball einen Schlag anlegen (N) "
                                     "und mit „Start“ auf den Ball klicken.")
             return
-        opts = AnalysisOptions(use_person_mask=bool(sess.project.settings.get("use_person_mask", True)))
+        opts = self._analysis_options()
         self._snapshot()
 
         def done(new) -> None:

@@ -7,7 +7,7 @@
 | 3 – Personen-Maske | ✅ fertig |
 | 4 – Automatische Impact-Erkennung | ✅ fertig |
 | 5 – Automatisches Ball-Tracking | ✅ fertig |
-| 6 – Optional: ML-Ballerkennung | ⏳ offen |
+| 6 – Optional: ML-Ballerkennung | ✅ fertig (optional, nicht Standard – D26) |
 | 7 – Workflow & Komfort | ⏳ offen |
 | 8 – Packaging & Doku | ⏳ offen |
 
@@ -98,6 +98,15 @@ und 120 fps, VFR-Zeitzuordnung.
 von 0,5 s, Ball ab 2 s unsichtbar, schwacher Kontrast), Startpunkt absichtlich 1,8 px daneben
 geklickt: mittlerer Fehler des gerenderten Tracer-Kopfs 0,1–0,5 px (gefordert ≤ 3 px), Landezeit
 ±6 %. Echter Clip (D25): Ball eines echten Schlags sauber verfolgt (Konfidenz 0,84).
+
+## Phase 6 – erledigt (schlank, optional)
+- `ball/ml_detector.py`: `YoloDetector` (Kachel-Inferenz, CPU/GPU automatisch) und `CombinedDetector`
+  hinter dem `BallDetector`-Interface; Auswahl über Projekteinstellungen.
+- `ball/dataset.py`, `tools/make_ball_dataset.py`: Trainingsdaten aus eigenen Clips (YOLO-Format).
+- `tools/label_balls.py`: Label-Werkzeug; `tools/train_yolo.py`: Training; `requirements-ml.txt`.
+- Lizenzen von Ultralytics und öffentlichen Datensätzen in DECISIONS.md (D26).
+- Tests (`tests/test_ml.py`) laufen ohne Ultralytics (Fake-Modell mit identischem `predict`-Vertrag);
+  einmalig mit echtem Ultralytics/CPU verifiziert (D26).
 
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.

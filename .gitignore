@@ -19,3 +19,5 @@ test_output/
 *.mp4
 *.avi
 !tests/data/**
+runs/
+*.pt

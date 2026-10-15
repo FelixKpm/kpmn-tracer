@@ -190,3 +190,33 @@ Zeitlupen-Zusammenschnitt einer Range-Session, Hochformat, VFR, Ton nicht nutzba
   ≥ 0,4 s) folgt; Kamera dabei mit dem Phase-2-Tracker kompensiert. Das senkt die Fehlalarme von 9 auf
   1, verpasst aber in diesem Clip den echten Schlag. Video-only-Kandidaten bekommen daher höchstens
   0,55, unbestätigte 0,2. Bei normalen iPhone-Clips ist der Ton der Hauptpfad.
+
+## D26 – Phase 6 schlank: ML als optionales, austauschbares Modul
+Die Spezifikation macht Phase 6 davon abhängig, ob Phase 5 auf echten Clips reicht. Auf dem
+verfügbaren echten Clip reichte das klassische Tracking (D25); Clips des Nutzers liegen noch nicht
+vor. Deshalb ist die ML-Erkennung vollständig vorbereitet, aber **nicht** Standard und **nicht** im
+Build:
+* `YoloDetector` implementiert dasselbe `BallDetector`-Interface und arbeitet auf der stabilisierten
+  ROI → Kandidaten fließen in denselben Tracker/Fit. `CombinedDetector` vereinigt klassisch + YOLO.
+  Auswahl über `project.settings["detector"]` = `classic` | `yolo` | `both` und `yolo_model`.
+* Inferenz in **nativen Kacheln** (Trainingsgröße, Überlappung 32 px): Ein auf 640 px herunter-
+  bzw. ein kleines Suchfenster auf 320 px hochskalierter Ball wird nicht erkannt (gemessen: erst 9
+  bzw. 17 Detektionen, mit Kacheln 95 von 96).
+* CPU-Fallback: `device="auto"` → CUDA falls vorhanden, sonst CPU. Verifiziert mit Ultralytics 8.4 /
+  PyTorch 2.14 (CPU): Mini-Training (YOLO11n, 15 Epochen, 525 Kacheln) ≈ wenige Minuten, mAP50 0,97;
+  Pipeline nur mit YOLO: 0,42 px Fehler, ~11 s pro Schlag.
+* Trainingsdaten aus den eigenen Clips (`kpmn_tracer/ball/dataset.py`, `tools/make_ball_dataset.py`):
+  Kacheln um die Ballposition bestätigter/sicherer Schläge + Negativ-Kacheln, YOLO-Labels;
+  Prüfen/Korrigieren mit `tools/label_balls.py`; Training mit `tools/train_yolo.py`.
+
+**Lizenzen:**
+* Ultralytics YOLO: **AGPL-3.0** (bzw. kommerzielle Enterprise-Lizenz). Für private Nutzung
+  unproblematisch; beim Weitergeben einer .exe *mit* Ultralytics gelten die AGPL-Pflichten
+  (Quellcode). Deshalb nur optional (`requirements-ml.txt`) und vom PyInstaller-Build ausgeschlossen.
+* Öffentliche Golfball-Datensätze auf Roboflow Universe, z. B. „Golf Balls“
+  (golf-balls/golf-balls-qujpk) und „golf project new“ (golfball-is8fc/golf-project-new): jeweils
+  **CC BY 4.0** (Namensnennung nötig); „golf ball detection“ (golfballtracker/golf-ball-detection-evnld):
+  **MIT**. Lizenz wird je Uploader gesetzt und muss auf der jeweiligen Seite vor Nutzung bestätigt
+  werden. Diese Datensätze zeigen meist große, nahe Bälle (Schlagposition, Grün) – für winzige Bälle
+  im Flug sind eigene Daten aus dem Datensatz-Werkzeug passender; die öffentlichen Daten eignen sich
+  zum Vortrainieren.

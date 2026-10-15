@@ -26,6 +26,29 @@ class AnalysisOptions:
     use_person_mask: bool = True
     track_camera: bool = True
     max_flight_s: float = MAX_FLIGHT_S
+    detector: str = "classic"  # "classic" | "yolo" | "both"
+    yolo_model: str | None = None
+
+
+def detector_factory(o: AnalysisOptions):
+    """Build the ball detector factory for the chosen mode (YOLO only if configured)."""
+    from kpmn_tracer.ball.auto import classic_factory
+
+    if o.detector == "classic" or not o.yolo_model:
+        if o.detector != "classic":
+            log.warning("No YOLO model configured - using the classic detector")
+        return classic_factory
+    from kpmn_tracer.ball.ml_detector import CombinedDetector, YoloDetector, load_yolo
+
+    model = load_yolo(o.yolo_model)
+
+    def factory(reader, H, size, n, mask):
+        yolo = YoloDetector(reader.read, H, size, n, model)
+        if o.detector == "yolo":
+            return yolo
+        return CombinedDetector([classic_factory(reader, H, size, n, mask), yolo])
+
+    return factory
 
 
 def _sub(progress: ProgressFn | None, a: float, b: float) -> ProgressFn:
@@ -64,7 +87,8 @@ def analyze_shot(
             mfn = tracking_mask_fn(masks, (session.reader.width, session.reader.height))
         if o.track_camera:
             shot.camera = analyze_shot_camera(session, shot, mfn, progress=_sub(progress, 0.3, 0.7), cancel=cancel)
-        result = auto_track(session, shot, mask=mfn, progress=_sub(progress, 0.7, 1.0), cancel=cancel)
+        result = auto_track(session, shot, detector_factory(o), mask=mfn,
+                            progress=_sub(progress, 0.7, 1.0), cancel=cancel)
     except BaseException:
         shot.land_frame, shot.anchors = saved_land, saved_anchors
         raise
