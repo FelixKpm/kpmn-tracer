@@ -66,6 +66,7 @@ class SynthConfig:
     person: bool = False
     person_center: tuple[float, float] | None = None  # world coords; default left of ball
     person_motion_px: float = 25.0
+    person_scale: float = 1.0
     # media
     noise_sigma: float = 1.5
     ball_radius_min: float = 1.0
@@ -225,7 +226,7 @@ def person_mask(cfg: SynthConfig, frame: int, H: np.ndarray) -> np.ndarray:
     t = frame / cfg.fps
     swing = cfg.person_motion_px * np.sin(2 * np.pi * 0.7 * t)
     sway = cfg.person_motion_px * 0.4 * np.sin(2 * np.pi * 0.3 * t + 1)
-    s = cfg.height / 360
+    s = cfg.height / 360 * cfg.person_scale
     parts = [  # (dx, dy, ax, ay) in world px, relative to centre
         (sway, -95 * s, 14 * s, 16 * s),  # head
         (sway, -30 * s, 30 * s, 55 * s),  # torso
