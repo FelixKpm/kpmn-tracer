@@ -70,7 +70,7 @@ def find_hint_frame(session: ClipSession, hint: tuple[float, float], max_s: floa
     step = max(1, int(round(0.25 * session.project.fps)))
     last = min(session.project.frame_count - 1, int(max_s * session.project.fps))
     for f in range(0, last + 1, step):
-        g = session.reader.gray(f)
+        g = session.reader.read(f)
         if locate_ball(g, (float(hp[0]), float(hp[1])), search_r=max(12.0, 0.03 * max(g.shape))) is not None:
             return f
     return None

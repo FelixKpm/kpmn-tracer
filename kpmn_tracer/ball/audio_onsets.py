@@ -28,7 +28,7 @@ class OnsetParams:
     min_rise_db: float = 12.0
     min_prominence_db: float = 18.0  # peak above the rolling noise floor
     floor_window_s: float = 1.0
-    min_distance_s: float = 0.6  # two swings can't be closer than this
+    min_distance_s: float = 0.25  # echo suppression; neighbouring bays can hit 0.4 s apart
     onset_fraction: float = 0.25  # onset = first sample above this fraction of the peak amplitude
 
 

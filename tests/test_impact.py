@@ -128,3 +128,24 @@ def test_time_to_frame_uses_real_timestamps_for_vfr(tmp_path: Path) -> None:
     assert sess.time_to_frame(ft[10] + 0.001) == 10
     assert sess.time_to_frame(ft[10] - 0.001) == 9
     assert abs(ft[2] - ft[1] - 1.45 / 30) < 0.002  # irregular interval preserved
+
+
+def test_presence_signal_with_template_in_the_middle(range_session) -> None:
+    """Regression: the ball hint frame is often not frame 0 (GUI)."""
+    sess, truth = range_session
+    ball = truth["frames"][100]["balls"][1]["frame"]  # second ball, resting at frame 100
+    cands = detect_impacts(sess, tuple(ball), 100)
+    good = [c.frame for c in cands if c.confidence >= 0.5]
+    for f in truth["impact_frames"]:
+        assert any(abs(g - f) <= 1 for g in good)
+
+
+def test_two_hits_from_neighbouring_bays_close_together() -> None:
+    sr = 48000
+    rng = np.random.default_rng(5)
+    x = 0.01 * rng.normal(size=3 * sr)
+    for tt, a in ((1.0, 0.9), (1.42, 0.6)):  # neighbour first and louder, ours 0.42 s later
+        c = click(sr, a, rng)
+        x[int(tt * sr):int(tt * sr) + c.size] += c
+    times = [o.time for o in detect_onsets(x, sr)]
+    assert len(times) == 2 and abs(times[1] - 1.42) < 0.002
