@@ -68,3 +68,30 @@ Ball-Erkennung noch Rendering. Sie liegen deshalb in einem eigenen Paket `trace/
 In PySide6 laufen an Signale gebundene Lambdas im Thread des Senders. Lange Aufgaben laufen in
 `QThread`-Workern; deren Signale werden über ein `TaskHandle`-Objekt im GUI-Thread (queued)
 weitergereicht, sodass Callbacks immer im GUI-Thread laufen.
+
+## D10 – Kamera-Tracking: Verkettung + direkte Nachregistrierung in *jedem* Frame
+Frame-zu-Frame-LK (Forward-Backward-Check, MAGSAC-Homographie) liefert eine Vorhersage
+`H(f→ref)`. Danach wird Frame *f* mit dieser Vorhersage in die Referenzgeometrie gewarpt und die
+Referenz-Features direkt hineingetrackt; die Rest-Homographie korrigiert die Vorhersage. Das
+eliminiert Drift vollständig und ist bei Proxy-Auflösung schnell genug (~30 ms/Frame bei 1280×720),
+deshalb Standard `refine_every = 1` statt „regelmäßig“. Gemessen auf synthetischem Clip mit 8 px
+Wackeln, 0,6° Rotation, 20 % Zoom und Schwenk: mittlerer Fehler ≈ 0,03 px (Abnahme: ≤ 2 px).
+Konfidenz = RANSAC-Inlier-Anteil der direkten Registrierung, gedämpft bei < 60 Stützpunkten.
+
+## D11 – Glättung: Spike-Erkennung + konfidenzgewichteter RTS-Kalman auf Eckpunkt-Parametern
+Ein klassischer gleitender Mittelwert würde echtes Handwackeln wegglätten – der Tracer muss diesem
+aber folgen. Deshalb: Parametrisierung über die 4 abgebildeten Bildecken (8 Werte), Ausreißer =
+isolierte Spikes in der 2. Differenz gegen eine *globale* robuste Skala (iterativ, größter zuerst),
+dann ein Constant-Velocity-Kalman mit RTS-Rückwärtslauf, dessen Messrauschen mit `1/Konfidenz²`
+skaliert. Gute Frames bleiben praktisch unverändert, schlechte/Ausreißer werden aus den Nachbarn
+überbrückt.
+
+## D12 – Stativ-Erkennung vorab per Stichprobe
+Vor dem vollen Tracking werden ~10 Frames direkt gegen den Referenz-Frame registriert. Bewegt sich
+keine Bildecke mehr als 0,6 px (Proxy), gilt der Clip als Stativ und das Tracking wird
+übersprungen (Button „Erzwingen“ in der GUI umgeht das).
+
+## D13 – Korrektur-Keyframes bleiben lokal
+Eine Korrektur verschiebt den projizierten Tracer in einem Frame. Damit sie nicht den ganzen Rest
+des Clips verschiebt, werden beim ersten Keyframe automatisch Null-Keyframes an den nächsten gut
+getrackten Frames davor/danach gesetzt; dazwischen wird linear interpoliert.

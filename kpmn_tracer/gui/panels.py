@@ -163,6 +163,7 @@ class ShotPanel(QWidget):
     jumpImpact = Signal()
     clearOffsets = Signal()
     paramsChanged = Signal()
+    trackCamera = Signal(bool)  # force tracking (skip tripod detection)
 
     def __init__(self) -> None:
         super().__init__()
@@ -212,6 +213,22 @@ class ShotPanel(QWidget):
         self.hint.setStyleSheet("color:#aaa;")
         tl.addWidget(self.hint, 3, 0, 1, 2)
         lay.addWidget(tbox)
+
+        cbox = QGroupBox("Kamera")
+        cl = QGridLayout(cbox)
+        self.cam_btn = QPushButton("Kamera tracken (T)")
+        self.cam_btn.setToolTip("Kamerabewegung um diesen Schlag analysieren (Stativ wird automatisch erkannt)")
+        self.cam_btn.clicked.connect(lambda: self.trackCamera.emit(False))
+        self.cam_force = QPushButton("Erzwingen")
+        self.cam_force.setToolTip("Tracking auch dann durchführen, wenn ein Stativ erkannt würde")
+        self.cam_force.clicked.connect(lambda: self.trackCamera.emit(True))
+        self.cam_status = QLabel("nicht analysiert (Stativ angenommen)")
+        self.cam_status.setWordWrap(True)
+        self.cam_status.setStyleSheet("color:#aaa;")
+        cl.addWidget(self.cam_btn, 0, 0)
+        cl.addWidget(self.cam_force, 0, 1)
+        cl.addWidget(self.cam_status, 1, 0, 1, 2)
+        lay.addWidget(cbox)
 
         pbox = QGroupBox("Flugkurve")
         pf = QFormLayout(pbox)
@@ -268,7 +285,18 @@ class ShotPanel(QWidget):
             for w in (self.duration, self.launch, self.descent, self.boost, self.decay, self.late, self.occlude):
                 w.setEnabled(enabled)
             if shot is None:
+                self.cam_status.setText("")
                 return
+            cam = shot.camera
+            if cam.mode == "tracked":
+                bad = sum(c < 0.5 for c in cam.confidence)
+                self.cam_status.setText(
+                    f"Handheld: Frames {cam.first_frame}–{cam.first_frame + len(cam.homographies) - 1} "
+                    f"getrackt, {bad} unsicher (rot in der Timeline)")
+            elif cam.analyzed:
+                self.cam_status.setText("Stativ erkannt – keine Kompensation nötig")
+            else:
+                self.cam_status.setText("nicht analysiert (Stativ angenommen)")
             self.duration.setValue(shot.flight_frames(fps) / fps)
             self.duration.setEnabled(not shot.uses_anchor_times())
             self.launch.setValue(shot.shape.launch_steepness)
