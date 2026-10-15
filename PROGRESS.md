@@ -3,7 +3,7 @@
 | Phase | Status |
 |---|---|
 | 1 – Fundament: Import, Vorschau, manueller Tracer, Export | ✅ fertig |
-| 2 – Handheld: Kamerabewegung kompensieren | ⏳ offen |
+| 2 – Handheld: Kamerabewegung kompensieren | ✅ fertig |
 | 3 – Personen-Maske | ⏳ offen |
 | 4 – Automatische Impact-Erkennung | ⏳ offen |
 | 5 – Automatisches Ball-Tracking | ⏳ offen |
@@ -32,6 +32,24 @@
 **Abnahme:** `tests/test_export.py` – synthetischer Stativ-Clip → ProRes-Overlay → per Skript über das
 Original gelegt: Alpha auf dem gesamten erwarteten Pfad > 0.5, Frameanzahl Overlay == Original,
 dekodiertes Overlay == direktes Rendering (±2/255).
+
+## Phase 2 – erledigt
+- `camera/features.py`: goodFeaturesToTrack (Ränder/Personenmaske ausgeschlossen), LK mit
+  Forward-Backward-Check; Features werden jeden Frame neu detektiert (nachgefüllt).
+- `camera/tracker.py`: Homographie pro Frame zum Impact-Frame (vorwärts + rückwärts), Verkettung +
+  direkte Nachregistrierung gegen den Referenz-Frame, Konfidenz pro Frame, Stativ-Erkennung.
+- `camera/smoothing.py`: Spike-Ausreißer + konfidenzgewichteter RTS-Kalman.
+- `camera/shot_camera.py`: Tracking-Bereich pro Schlag (Impact − 0,5 s … Landung + 2,5 s),
+  Umrechnung Proxy → Quellpixel, Ablage im Schlag (Projektdatei).
+- Renderer/Export projizieren den im Referenz-Frame definierten Tracer pro Frame mit der inversen
+  Homographie.
+- GUI: „Kamera tracken (T)“ / „Erzwingen“, Status, unsichere Frames rot in der Timeline,
+  Konfidenz in der Vorschau, Korrektur-Werkzeug (K) mit lokalen Keyframes.
+
+**Abnahme:** `tests/test_camera.py::test_tracker_accuracy_on_shaky_zooming_clip` – synthetischer Clip
+mit Wackeln (8 px), Rotation, 20 % Zoom und Schwenk: mittlerer Tracer-Positionsfehler ≈ 0,03 px
+(gefordert ≤ 2 px). Weitere Tests: Ausreißer-Überbrückung, unbrauchbare Frames → niedrige Konfidenz,
+Stativ-Erkennung.
 
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.
