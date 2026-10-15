@@ -168,8 +168,9 @@ class Shot:
 
     def flight_frames(self, fps: float) -> float:
         """Impact -> landing duration in frames."""
-        if self.uses_anchor_times():
-            return float(self.anchors[-1].t)  # type: ignore[arg-type]
+        land = self.anchor(AnchorKind.LAND)
+        if land is not None and land.t is not None and land.t > 0:
+            return float(land.t)
         if self.land_frame is not None and self.land_frame > self.impact_frame:
             return float(self.land_frame - self.impact_frame)
         return DEFAULT_FLIGHT_SECONDS * fps
@@ -185,18 +186,75 @@ class Shot:
         tau = (frame - self.impact_frame) / dur
         if tau >= 1.0:
             return 1.0
-        return float(self.u_at_tau(tau, path)[0])
+        return float(self.u_at_tau(tau, path, dur)[0])
 
-    def u_at_tau(self, tau: float | np.ndarray, path: FlightPath | None = None) -> np.ndarray:
+    def timed_pairs(self, path: FlightPath, dur: float) -> list[tuple[float, float]] | None:
+        """(tau, u) of anchors that pin *when* the ball was there, plus start and landing.
+
+        Anchors get a time from automatic tracking or from the "ball here" tool. With at
+        least one pinned anchor between start and landing, timing follows these points
+        (monotone interpolation) instead of the easing curve - needed for balls flying
+        away from the camera, whose screen speed drops by a factor of 50+ after impact.
+        """
+        pairs = [(0.0, 0.0)]
+        for a, k in zip(self.anchors, path.knots):
+            if a.t is not None and a.kind != AnchorKind.START and 0 < a.t < dur:
+                pairs.append((float(a.t) / dur, float(k)))
+        pairs.append((1.0, 1.0))
+        pairs.sort()
+        clean = [pairs[0]]
+        for tau, u in pairs[1:]:
+            if tau > clean[-1][0] + 1e-9 and u > clean[-1][1] + 1e-9:
+                clean.append((tau, u))
+        if clean[-1] != (1.0, 1.0):
+            clean[-1] = (1.0, 1.0) if clean[-1][0] < 1.0 else clean[-1]
+        return clean if len(clean) > 2 else None
+
+    def u_at_tau(self, tau: float | np.ndarray, path: FlightPath | None = None,
+                 dur: float | None = None) -> np.ndarray:
         path = path or self.path()
         if path is None:
             raise ValueError("incomplete shot")
-        if self.uses_anchor_times():
-            dur = float(self.anchors[-1].t)  # type: ignore[arg-type]
-            taus = tuple(float(a.t) / dur for a in self.anchors)  # type: ignore[arg-type]
-            taus = (0.0,) + taus[1:] if taus[0] > 0 else taus
-            return AnchorTiming(taus, tuple(path.knots)).u_at(tau)
+        if dur is None:
+            land = self.anchor(AnchorKind.LAND)
+            dur = float(land.t) if land is not None and land.t else (
+                float(self.land_frame - self.impact_frame) if self.land_frame else None)
+        pairs = self.timed_pairs(path, dur) if dur else None
+        if pairs is not None:
+            taus, us = zip(*pairs)
+            return AnchorTiming(tuple(taus), tuple(us)).u_at(tau)
         return self.timing.u_at(tau)
+
+    def pin_ball(self, x: float, y: float, frame: int, fps: float) -> Anchor | None:
+        """"Ball here": the ball is at reference position (x, y) at ``frame``.
+
+        Inserts a timed anchor in flight order (or re-times an existing anchor of that frame).
+        """
+        t = float(frame - self.impact_frame)
+        dur = self.flight_frames(fps)
+        if t <= 0 or t >= dur or not self.is_complete():
+            return None
+        if self.land_frame is None:
+            self.land_frame = self.impact_frame + dur  # keep the current duration fixed
+        for a in self.anchors:
+            if a.t is not None and abs(a.t - t) < 0.5 and a.kind == AnchorKind.POINT:
+                a.x, a.y = x, y
+                return a
+        for a in self.anchors:  # clicking the ball right on the apex/landing marker times that anchor
+            if a.kind in (AnchorKind.APEX, AnchorKind.POINT) and a.t is None and np.hypot(a.x - x, a.y - y) < 12:
+                a.x, a.y, a.t = x, y, t
+                return a
+        new = Anchor(x, y, AnchorKind.POINT, t)
+        # flight order = time order; anchors without a time get one from the current timing
+        path = self.path()
+        assert path is not None
+        taus = np.linspace(0.0, 1.0, 2001)
+        us = self.u_at_tau(taus, path, dur)
+        est = [a.t if a.t is not None else float(np.interp(k, us, taus)) * dur
+               for a, k in zip(self.anchors, path.knots)]
+        idx = next((i for i in range(1, len(self.anchors)) if est[i] > t), len(self.anchors) - 1)
+        self.anchors.insert(idx, new)
+        return new
 
     # ------------------------------------------------------------ projection
     def offset_at(self, frame: float) -> np.ndarray:

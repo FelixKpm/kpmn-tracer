@@ -70,3 +70,29 @@ def test_serialisation_roundtrip() -> None:
     d = s.to_dict()
     s2 = Shot.from_dict(d)
     assert s2.to_dict() == d
+
+
+def test_ball_here_pins_pull_the_head_onto_the_ball() -> None:
+    """Ball flying away from the camera: screen speed drops ~50x after impact (user report)."""
+    s = Shot(impact_frame=0, land_frame=90)
+    s.set_anchor(AnchorKind.START, 560, 2340)
+    s.set_anchor(AnchorKind.APEX, 770, 1070)
+    s.set_anchor(AnchorKind.LAND, 682, 1922)
+    pins = {1: (648, 1898), 2: (696, 1552), 4: (732, 1300), 8: (764, 1124), 15: (770, 1070), 52: (726, 1450)}
+    for f, xy in pins.items():
+        assert s.pin_ball(*xy, f, 30) is not None
+    path = s.path()
+    for f, xy in pins.items():
+        assert np.allclose(path.evaluate(s.head_u(f, 30))[0], xy, atol=1e-6), f
+    assert s.anchor(AnchorKind.APEX).t == 15  # clicking on the apex marker times the apex itself
+    us = [s.head_u(f, 30) for f in range(0, 91)]
+    assert np.all(np.diff(us) >= -1e-12)
+    assert s.flight_frames(30) == 90  # landing time unchanged
+    assert s.pin_ball(700, 1500, 95, 30) is None  # after landing: ignored
+
+
+def test_easing_reaches_extreme_launch_profiles() -> None:
+    from kpmn_tracer.trace.timing import EasingTiming
+
+    e = EasingTiming(launch_boost=60, launch_decay=0.02, late_boost=0.8)
+    assert e.u_at(1 / 90)[0] > 0.2  # a fifth of the path in the first frame (was < 0.1 with the old limits)

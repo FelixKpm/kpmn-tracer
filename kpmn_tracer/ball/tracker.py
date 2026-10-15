@@ -9,9 +9,11 @@
    model once enough points exist), search a gate around it; the gate grows
    with every missed frame. Misses are bridged by prediction instead of
    stopping, up to ``max_gap_s``.
-3. **Global fit + re-search**: robust fit on all detections, outliers removed,
-   then frames without a detection are searched again in a tight window
-   around the fitted curve (recovers faint detections).
+3. **Clean-up + re-search**: detections that jump away from their temporal
+   neighbours are removed (local check - a real flight close to the camera
+   does not follow one global model), then frames without a detection are
+   searched again around the interpolation of the neighbouring detections.
+   A global robust fit is kept only for the landing estimate.
 
 Everything is in reference-frame proxy pixels and frames since impact.
 """
@@ -51,6 +53,7 @@ class BallTrack:
     points: dict[int, Candidate] = field(default_factory=dict)  # frame -> accepted detection
     fit: FitResult | None = None
     last_frame: int = 0  # last frame the follower looked at
+    local_rms: float = 0.0  # smoothness of the detections (px)
 
     def arrays(self) -> tuple[np.ndarray, np.ndarray]:
         fs = sorted(self.points)
@@ -213,37 +216,79 @@ class BallTracker:
             f += 1
 
     # ------------------------------------------------------------ global fit
+    @staticmethod
+    def _local_residuals(t: np.ndarray, xy: np.ndarray) -> np.ndarray:
+        """Distance of each detection from the curve through its two neighbours on each side.
+
+        Purely local: real flights near the camera (strong deceleration, drag, lift)
+        do not follow one global model, but they are smooth over a few frames.
+        """
+        n = len(t)
+        res = np.zeros(n)
+        for i in range(n):
+            idx = [j for j in range(max(0, i - 2), min(n, i + 3)) if j != i]
+            if len(idx) < 2:
+                continue
+            deg = 2 if len(idx) >= 3 else 1
+            tt = t[idx]
+            px = np.polyval(np.polyfit(tt, xy[idx, 0], deg), t[i])
+            py = np.polyval(np.polyfit(tt, xy[idx, 1], deg), t[i])
+            res[i] = np.hypot(xy[i, 0] - px, xy[i, 1] - py)
+        return res
+
+    def _remove_local_outliers(self, track: BallTrack) -> None:
+        """Drop detections that jump away from their neighbours (largest first).
+
+        The start point (t = 0) takes part as a fixed neighbour, so the very fast
+        first frames after impact are judged against where the ball came from.
+        """
+        for _ in range(len(track.points)):
+            t, xy = track.arrays()
+            if len(t) < 4:
+                return
+            tk = np.r_[0.0, t]
+            xk = np.vstack([track.start, xy])
+            res = self._local_residuals(tk, xk)[1:]
+            step = np.hypot(*np.diff(xk, axis=0).T)  # distance to the previous point
+            nxt = np.r_[step[1:], step[-1]]
+            tol = np.maximum(2.0 * self.p.fit_tol, 0.5 * np.maximum(step, nxt))
+            worst = int(np.argmax(res / tol))
+            if res[worst] <= tol[worst]:
+                return
+            del track.points[int(t[worst]) + track.impact]
+
     def _finalise(self, track: BallTrack, ball_r: float) -> None:
-        t, xy = track.arrays()
-        fit = ransac_fit(t, xy, track.start, tol=self.p.fit_tol, perspective=True)
-        if fit is None:
-            fit = ransac_fit(t, xy, track.start, tol=self.p.fit_tol, perspective=False)
-        if fit is None:
+        self._remove_local_outliers(track)
+        if len(track.points) < 2:
             return
-        fs = sorted(track.points)
-        for f, ok in zip(fs, fit.inliers):
-            if not ok:
-                del track.points[f]
-        # re-search frames without detection along the fitted curve
-        first, last = track.impact + 1, max(track.points) if track.points else track.impact
+        # re-search frames without detection, predicted from the neighbouring detections
+        first, last = track.impact + 1, max(track.points)
         added = 0
         for f in range(first, last + 1):
             if f in track.points:
                 continue
+            t, xy = track.arrays()
             tt = f - track.impact
-            pred = fit.model(tt)[0]
-            speed = float(np.hypot(*(fit.model(tt)[0] - fit.model(tt - 1)[0])))
-            r_exp = max(1.0, ball_r / (1.0 + max(fit.model.c, 0) * tt))
-            cands = self.det.detect(f, self._roi(pred, self.p.research_tol + 4), r_exp, self._gap(speed, r_exp))
-            near = [c for c in cands if np.hypot(c.x - pred[0], c.y - pred[1]) < self.p.research_tol]
+            tk = np.r_[0.0, t]
+            xk = np.vstack([track.start, xy])
+            pred = np.array([np.interp(tt, tk, xk[:, 0]), np.interp(tt, tk, xk[:, 1])])
+            j = int(np.searchsorted(tk, tt))
+            gap_step = float(np.hypot(*(xk[min(j, len(tk) - 1)] - xk[max(j - 1, 0)])))
+            tol = self.p.research_tol + 0.3 * gap_step
+            speed = gap_step / max(1.0, tk[min(j, len(tk) - 1)] - tk[max(j - 1, 0)])
+            r_exp = max(1.0, ball_r * 0.5)
+            cands = self.det.detect(f, self._roi(pred, tol + 4), r_exp, self._gap(speed, r_exp))
+            near = [c for c in cands if np.hypot(c.x - pred[0], c.y - pred[1]) < tol]
             if near:
                 track.points[f] = min(near, key=lambda c: np.hypot(c.x - pred[0], c.y - pred[1]))
                 added += 1
         if added:
-            t, xy = track.arrays()
-            fit2 = ransac_fit(t, xy, track.start, tol=self.p.fit_tol, perspective=True)
-            fit = fit2 or fit
-        track.fit = fit
+            self._remove_local_outliers(track)
+        t, xy = track.arrays()
+        track.local_rms = float(np.sqrt(np.mean(self._local_residuals(t, xy) ** 2))) if len(t) >= 4 else 0.0
+        # global model: only used for the landing estimate and as a fallback trajectory
+        fit = ransac_fit(t, xy, track.start, tol=self.p.fit_tol, perspective=True)
+        track.fit = fit or ransac_fit(t, xy, track.start, tol=self.p.fit_tol, perspective=False)
 
     # ------------------------------------------------------------ public
     def track(self, impact: int, start: tuple[float, float], ball_r: float = 2.0,
@@ -258,17 +303,17 @@ class BallTracker:
             sub = (lambda f, i=i: progress((i + f) / len(hyps))) if progress else None
             self._follow(tr, ball_r, sub, cancel)
             self._finalise(tr, ball_r)
-            if not tr.points or tr.fit is None:
+            if len(tr.points) < 3:
                 continue
             span = max(tr.points) - impact
-            # long, dense and smooth beats short: the club head leaves the model quickly
-            score = len(tr.points) + 0.5 * span - 4.0 * tr.fit.rms
-            log.debug("hypothesis %d: %d points over %d frames, rms %.2f -> %.1f",
-                      i, len(tr.points), span, tr.fit.rms, score)
+            # long, dense and smooth beats short: the club head leaves the flight quickly
+            score = len(tr.points) + 0.5 * span - 4.0 * tr.local_rms
+            log.debug("hypothesis %d: %d points over %d frames, local rms %.2f -> %.1f",
+                      i, len(tr.points), span, tr.local_rms, score)
             if score > best_score:
                 best, best_score = tr, score
         if best is None:
             return None
-        log.info("Ball tracking: %d detections over %d frames, rms %.2f px (%d hypotheses)",
-                 len(best.points), max(best.points) - impact, best.fit.rms if best.fit else -1, len(hyps))
+        log.info("Ball tracking: %d detections over %d frames, local rms %.2f px (%d hypotheses)",
+                 len(best.points), max(best.points) - impact, best.local_rms, len(hyps))
         return best

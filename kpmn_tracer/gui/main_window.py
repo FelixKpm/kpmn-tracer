@@ -53,7 +53,10 @@ TOOL_HINTS = {
     "land": "Auf den Landepunkt klicken. Mit „Landung = Frame“ den Zeitpunkt setzen.",
     "point": "Klick fügt einen Kurvenpunkt hinzu (z. B. für Draw/Fade).",
     "offset": "Klick = wo der Tracer-Kopf in diesem Frame sein soll (Korrektur-Keyframe).",
+    "ball": "Frame wählen, auf den Ball klicken: der Tracer-Kopf ist in diesem Frame genau dort. "
+            "Zwei, drei Klicks direkt nach dem Impact reichen bei schnell wegfliegenden Bällen.",
 }
+PIN_COLOR = QColor(240, 90, 240)
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
@@ -177,6 +180,7 @@ class MainWindow(QMainWindow):
         act(editm, "Landung = aktueller Frame", self.set_land_frame, "O")
         act(editm, "Ausgewählten Punkt löschen", self.delete_selected, QKeySequence.StandardKey.Delete)
         act(editm, "Kamera tracken", lambda: self.track_camera(False), "T")
+        act(editm, "„Ball hier“-Punkte entfernen", self.clear_pins, None)
         act(editm, "Impacts erkennen", self.detect_impacts, "D")
         act(editm, "Ball automatisch tracken", self.auto_track_shot, "B")
         for key, text, sc, _tip in TOOLS:
@@ -474,7 +478,10 @@ class MainWindow(QMainWindow):
                 continue  # dense auto samples: only show the main anchors
             fp = shot.to_frame(np.array([[a.x, a.y]]), self.frame)
             pp = s.source_to_proxy(fp)[0]
-            out.append(Handle(f"a{i}", float(pp[0]), float(pp[1]), KIND_COLORS[a.kind], KIND_LABELS[a.kind]))
+            color, label = KIND_COLORS[a.kind], KIND_LABELS[a.kind]
+            if a.kind == AnchorKind.POINT and a.t is not None:
+                color, label = PIN_COLOR, f"+{a.t:.0f}"  # "ball here" pin: frames after impact
+            out.append(Handle(f"a{i}", float(pp[0]), float(pp[1]), color, label))
         return out
 
     # ================================================================ editing
@@ -541,9 +548,21 @@ class MainWindow(QMainWindow):
             return
         self._snapshot()
         shot.land_frame = float(self.frame)
+        dur = shot.land_frame - shot.impact_frame
         for a in shot.anchors:
-            a.t = None  # switch to manual timing
+            if a.kind == AnchorKind.LAND or (a.t is not None and a.t >= dur):
+                a.t = None  # the landing time now comes from land_frame; keep earlier "ball here" pins
         self.on_project_changed()
+
+    def clear_pins(self) -> None:
+        shot = self.current_shot()
+        if shot is None:
+            return
+        pins = [a for a in shot.anchors if a.kind == AnchorKind.POINT and a.t is not None]
+        if pins:
+            self._snapshot()
+            shot.anchors = [a for a in shot.anchors if a not in pins]
+            self.on_project_changed()
 
     def clear_offsets(self) -> None:
         shot = self.current_shot()
@@ -569,6 +588,13 @@ class MainWindow(QMainWindow):
         self._snapshot()
         if self.tool == "offset":
             self._add_offset(shot, x, y)
+        elif self.tool == "ball":
+            rx, ry = self._click_to_ref(shot, x, y)
+            if shot.pin_ball(rx, ry, self.frame, self.project.fps) is None:  # type: ignore[union-attr]
+                self._undo.pop()
+                self.statusBar().showMessage(
+                    "„Ball hier“ geht nur zwischen Impact und Landung eines vollständigen Tracers", 4000)
+                return
         else:
             rx, ry = self._click_to_ref(shot, x, y)
             if self.tool == "point":
@@ -686,7 +712,8 @@ class MainWindow(QMainWindow):
         shot.shape.descent_steepness = sp.descent.value()
         newly_occluding = sp.occlude.isChecked() and not shot.occlude
         shot.occlude = sp.occlude.isChecked()
-        if not shot.uses_anchor_times():
+        land = shot.anchor(AnchorKind.LAND)
+        if land is None or land.t is None:
             shot.land_frame = shot.impact_frame + sp.duration.value() * p.fps
         self.on_project_changed()
         if newly_occluding:
@@ -833,7 +860,7 @@ class MainWindow(QMainWindow):
         if hint is not None and self.session is not None:
             s = self.session
             hp = s.source_to_proxy(np.array([hint]))[0]
-            g = s.reader.gray(c.frame)
+            g = s.reader.read(c.frame)
             loc = locate_ball(g, (float(hp[0]), float(hp[1])), search_r=max(12.0, 0.03 * max(g.shape)))
             if loc is not None:
                 pos = s.proxy_to_source(np.array([[loc[0], loc[1]]]))[0]

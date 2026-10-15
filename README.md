@@ -55,6 +55,9 @@ die Statusleiste zeigt Auflösung, fps, Rotation, **VFR** und **HDR** an.
 2. Auf den Ball klicken (Start), dann auf den höchsten Punkt (Apex), dann auf den Landepunkt.
 3. Zum Landezeitpunkt gehen und **O** drücken (oder die Flugzeit im Panel einstellen).
 4. Form und Tempo im Panel *Flugkurve* anpassen; **P** fügt einen Zusatzpunkt hinzu (Draw/Fade).
+5. **H – Ball hier:** Hängt der Tracer hinter dem Ball her (typisch, wenn der Ball vom Betrachter
+   wegfliegt), in einigen Frames auf den Ball klicken – der Tracer-Kopf ist in diesen Frames genau
+   dort. 2–3 Klicks direkt nach dem Impact, einer am Apex und ein, zwei im Abstieg reichen.
 
 ### 3. Nachkorrigieren (aus der Hand gefilmt)
 * **T** – *Kamera tracken*: unsichere Frames erscheinen **rot** in der Timeline.
@@ -91,7 +94,7 @@ Das Overlay hat immer dieselbe Auflösung, dieselbe Bildrate und **dieselbe Fram
 | Leertaste | Abspielen / Pause |
 | Pos1 / Strg+← / Strg+→ | Zum Impact / vorheriger, nächster Schlag |
 | N · I · O | Neuer Schlag · Impact = Frame · Landung = Frame |
-| V S A L P K | Auswählen, Start, Apex, Landung, Zusatzpunkt, Korrektur |
+| V S A L P K H | Auswählen, Start, Apex, Landung, Zusatzpunkt, Korrektur, Ball hier |
 | B · T · D | Ball tracken · Kamera tracken · Impacts erkennen |
 | C | Schlag bestätigen |
 | Entf | Ausgewählten Zusatzpunkt löschen |
@@ -137,6 +140,11 @@ HDR-Original graden. Nur die *eingebrannten* MP4-Exporte sind SDR (zum Posten ge
   Punkte sind vorbefüllt – einfach ziehen (manueller Modus). *Vereinfachen* macht aus einem
   Auto-Ergebnis drei gut ziehbare Punkte.
 * Stark bewegte Kamera: **T** (Kamera tracken), rot markierte Frames mit **K** korrigieren.
+
+**Tracer hängt im Steigflug hinter dem Ball her (manueller Modus)**
+Bei Bällen, die vom Betrachter wegfliegen, ist der Ball im ersten Frame nach dem Impact schon weit
+oben und wird danach im Bild immer langsamer. Am besten **B** (Ball tracken) verwenden; von Hand mit
+dem Werkzeug **H** in 2–3 Frames direkt nach dem Impact auf den Ball klicken.
 
 **Impacts werden nicht erkannt**
 Der Ton ist die zuverlässigste Quelle. Ohne Ton (oder in Zeitlupe) muss der Ball vorher sichtbar

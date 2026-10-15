@@ -40,7 +40,7 @@ class ImpactParams:
     ball_radius: float | None = None  # proxy px; None = estimate from the hint frame
     presence_threshold: float = 0.5  # relative ball contrast above = ball present
     min_present_frames: int = 3
-    min_absent_s: float = 0.25
+    min_absent_s: float = 1.0  # a hit ball leaves the spot empty until the next ball is teed
     match_window_s: float = 0.25
     search_px: int = 3  # template search radius around the expected position
 
@@ -65,37 +65,52 @@ class ImpactCandidate:
 
 
 # ---------------------------------------------------------------- ball location
-def locate_ball(gray: np.ndarray, hint: tuple[float, float], search_r: float = 40,
+def ball_tophat(img: np.ndarray, k: int) -> np.ndarray:
+    """White top-hat; for colour images the maximum over B, G, R.
+
+    A yellow range ball on green turf hardly differs in grey but clearly in red.
+    """
+    se = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    if img.ndim == 2:
+        return cv2.morphologyEx(img, cv2.MORPH_TOPHAT, se)
+    return np.max(np.stack([cv2.morphologyEx(np.ascontiguousarray(img[..., c]), cv2.MORPH_TOPHAT, se)
+                            for c in range(img.shape[2])]), axis=0)
+
+
+def locate_ball(img: np.ndarray, hint: tuple[float, float], search_r: float = 40,
                 max_r: float = 30) -> tuple[float, float, float] | None:
-    """Find a small bright compact blob near ``hint`` -> (x, y, radius) or None."""
-    h, w = gray.shape
+    """Find a bright compact blob near ``hint`` (grey or BGR image) -> (x, y, radius) or None."""
+    h, w = img.shape[:2]
     x0, y0 = int(max(0, hint[0] - search_r - max_r)), int(max(0, hint[1] - search_r - max_r))
     x1, y1 = int(min(w, hint[0] + search_r + max_r + 1)), int(min(h, hint[1] + search_r + max_r + 1))
-    roi = gray[y0:y1, x0:x1]
+    roi = img[y0:y1, x0:x1]
     if roi.size == 0:
         return None
-    k = int(2 * max_r + 1)
-    tophat = cv2.morphologyEx(roi, cv2.MORPH_TOPHAT, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    tophat = ball_tophat(roi, int(2 * max_r + 1))
     if tophat.max() < 25:
         return None
-    _, bw = cv2.threshold(tophat, max(20, int(tophat.max() * 0.45)), 255, cv2.THRESH_BINARY)
-    n, lab, stats, cent = cv2.connectedComponentsWithStats(bw)
     best, best_score = None, -1.0
-    for i in range(1, n):
-        area = stats[i, cv2.CC_STAT_AREA]
-        bw_, bh_ = stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
-        if area < 2 or max(bw_, bh_) > 2.5 * max_r:
-            continue
-        fill = area / float(bw_ * bh_)
-        aspect = min(bw_, bh_) / max(bw_, bh_)
-        cx, cy = cent[i][0] + x0, cent[i][1] + y0
-        dist = np.hypot(cx - hint[0], cy - hint[1])
-        if dist > search_r:
-            continue
-        bright = float(tophat[lab == i].mean())
-        score = bright * aspect * fill / (1.0 + dist / 10.0)
-        if score > best_score:
-            best, best_score = (cx, cy, max(1.0, np.sqrt(area / np.pi))), score
+    # several thresholds: a big, moderately bright ball must not lose against a small,
+    # very bright tee or glint just because the threshold is relative to the brightest pixel
+    for frac in (0.25, 0.35, 0.45, 0.6):
+        _, bw = cv2.threshold(tophat, max(20, int(tophat.max() * frac)), 255, cv2.THRESH_BINARY)
+        n, lab, stats, cent = cv2.connectedComponentsWithStats(bw)
+        for i in range(1, n):
+            area = stats[i, cv2.CC_STAT_AREA]
+            bw_, bh_ = stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
+            if area < 2 or max(bw_, bh_) > 2.5 * max_r:
+                continue
+            fill = area / float(bw_ * bh_)
+            aspect = min(bw_, bh_) / max(bw_, bh_)
+            cx, cy = cent[i][0] + x0, cent[i][1] + y0
+            dist = np.hypot(cx - hint[0], cy - hint[1])
+            if dist > search_r:
+                continue
+            bright = float(tophat[lab == i].mean())
+            # compact, bright and reasonably large (glints are tiny); close to the click
+            score = bright * aspect * fill * np.sqrt(area) / (1.0 + dist / 10.0)
+            if score > best_score:
+                best, best_score = (cx, cy, max(1.0, np.sqrt(area / np.pi))), score
     return best
 
 
@@ -110,24 +125,59 @@ def presence_signal(
     reader: FrameReader, ball_xy: tuple[float, float], ball_r: float, template_frame: int,
     p: ImpactParams, progress: ProgressFn | None = None, cancel: CancelFn | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Per frame: (ball contrast relative to the template frame, ROI centre (n,2) in proxy px)."""
-    r = max(2, int(np.ceil(ball_r * 1.5))) + p.search_px
+    """Per frame: (presence score, ROI centre (n,2) in proxy px).
+
+    Score = min(ball contrast relative to the template frame, template similarity / 0.8):
+    the contrast separates tiny balls from their background, the similarity separates
+    big, close balls from bright textured grass behind them (contrast alone stays high).
+    """
+    r = max(1, int(np.ceil(ball_r * 0.7))) + 2  # the ball itself (+2 px), not its neighbourhood
     k = int(2 * np.ceil(ball_r * 2.5) + 1)  # top-hat kernel: larger than the ball
     pad = k
-    g0 = reader.gray(template_frame)
+    g0 = reader.read(template_frame)
     cx, cy = ball_xy
 
-    def measure(g: np.ndarray, x: float, y: float) -> float | None:
+    def plane(img: np.ndarray, c: int) -> np.ndarray:
+        return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if c == 3 else np.ascontiguousarray(img[..., c])
+
+    def measure(g: np.ndarray, x: float, y: float, c: int) -> float | None:
         xi, yi = int(round(x)), int(round(y))
         win = g[yi - r - pad:yi + r + pad + 1, xi - r - pad:xi + r + pad + 1]
-        if win.shape != (2 * (r + pad) + 1, 2 * (r + pad) + 1):
+        if win.shape[:2] != (2 * (r + pad) + 1, 2 * (r + pad) + 1):
             return None
-        th = cv2.morphologyEx(win, cv2.MORPH_TOPHAT, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+        th = ball_tophat(plane(win, c), k)
         return float(th[pad:-pad, pad:-pad].max())
 
-    ref = measure(g0, cx, cy)
+    def separation(c: int) -> float:
+        """Ball peak vs. the strongest structure around it, in plane ``c`` of the template frame."""
+        xi, yi = int(round(cx)), int(round(cy))
+        R = r + 3 * pad
+        win = g0[max(0, yi - R):yi + R + 1, max(0, xi - R):xi + R + 1]
+        th = ball_tophat(plane(win, c), k).astype(np.float32)
+        oy, ox = yi - max(0, yi - R), xi - max(0, xi - R)
+        yy, xx = np.ogrid[:th.shape[0], :th.shape[1]]
+        inner = (yy - oy) ** 2 + (xx - ox) ** 2 <= (r + 1) ** 2
+        around = th[~inner]
+        return float(th[inner].max()) / (float(np.percentile(around, 99)) + 5.0) if around.size else 0.0
+
+    # the colour plane in which this ball stands out most (white ball: grey/blue, yellow on green: red)
+    chan = max(range(4), key=separation)
+    log.debug("presence: using plane %s", "BGR"[chan] if chan < 3 else "grey")
+
+    ref = measure(g0, cx, cy, chan)
     if ref is None:
         raise ValueError("ball too close to the image border")
+    tr = int(np.ceil(2.2 * ball_r))
+    tpl = g0[int(cy) - tr:int(cy) + tr + 1, int(cx) - tr:int(cx) + tr + 1].copy()
+    s_px = p.search_px
+
+    def similarity(g: np.ndarray, x: float, y: float) -> float:
+        xi, yi = int(round(x)), int(round(y))
+        win = g[yi - tr - s_px:yi + tr + s_px + 1, xi - tr - s_px:xi + tr + s_px + 1]
+        if tpl.shape[:2] != (2 * tr + 1, 2 * tr + 1) or win.shape[:2] != (2 * (tr + s_px) + 1,) * 2:
+            return 1.0  # near the border: rely on the contrast alone
+        return float(cv2.matchTemplate(win, tpl, cv2.TM_CCOEFF_NORMED).max())
+
     ref = max(ref, 10.0)
     n = len(reader)
     scale = 320.0 / max(reader.width, reader.height)
@@ -141,15 +191,17 @@ def presence_signal(
     for i, f in enumerate(order):
         if cancel is not None and cancel():
             raise CancelledError("impact detection cancelled")
-        g = reader.gray(f)
-        sm = small(g)
+        g = reader.read(f)
+        sm = small(cv2.cvtColor(g, cv2.COLOR_BGR2GRAY))
         if f != template_frame:
             nb = f - 1 if f > template_frame else f + 1
             pos[f] = pos[nb] + _shift(prev_small[nb], sm) / scale
         prev_small[f] = sm
-        prev_small.pop(f - 2 if f > template_frame else f + 2, None)
-        v = measure(g, *pos[f])
-        score[f] = 0.0 if v is None else min(1.5, v / ref)
+        old = f - 2 if f > template_frame else f + 2
+        if old != template_frame:  # the backward pass starts again from the template frame
+            prev_small.pop(old, None)
+        v = measure(g, *pos[f], chan)
+        score[f] = 0.0 if v is None else min(1.5, v / ref, similarity(g, *pos[f]) / 0.8)
         centres[f] = pos[f]
         if progress is not None and i % 10 == 0:
             progress(i / n)
@@ -197,7 +249,7 @@ def launch_seen(reader: FrameReader, frame: int, ball_xy: tuple[float, float], b
     look = range(frame - 1, max(-1, frame - 1 - int(0.5 * fps)), -1)
     found = []
     for f in look:
-        loc = locate_ball(reader.gray(f), ball_xy, search_r=max(12.0, 4 * ball_r))
+        loc = locate_ball(reader.read(f), ball_xy, search_r=max(12.0, 4 * ball_r))
         if loc is not None and loc[2] >= 1.0:
             found.append(loc)
     if len(found) < 0.6 * len(look):
@@ -268,7 +320,7 @@ def detect_impacts(
         hf = hint_frame if hint_frame is not None else 0
         hint_proxy = session.source_to_proxy(np.array([ball_hint]))[0]
         with FrameReader(session.reader.path, cache_size=4) as reader:
-            g = reader.gray(hf)
+            g = reader.read(hf)
             loc = locate_ball(g, (float(hint_proxy[0]), float(hint_proxy[1])),
                               search_r=max(12.0, 0.02 * max(g.shape)))
             if loc is None:
@@ -291,10 +343,17 @@ def detect_impacts(
     win = max(1, int(round(p.match_window_s * fps)))
     out: list[ImpactCandidate] = []
     used_video: set[int] = set()
-    for fa, t, strength in audio:
-        match = [v for v in vid if abs(v - fa) <= win]
-        if match:
-            v = min(match, key=lambda v: abs(v - fa))
+    # one-to-one: every video event pairs with its closest audio event only
+    pair: dict[int, int] = {}  # audio index -> video frame
+    for v in vid:
+        close = [(abs(v - fa), i) for i, (fa, _t, _s) in enumerate(audio) if abs(v - fa) <= win]
+        if close:
+            d, i = min(close)
+            if i not in pair or abs(pair[i] - audio[i][0]) > d:
+                pair[i] = v
+    for i, (fa, t, strength) in enumerate(audio):
+        if i in pair:
+            v = pair[i]
             used_video.add(v)
             # audio is sample accurate; trust video only if they disagree by > 2 frames
             frame = fa if abs(v - fa) <= 2 else v
@@ -329,6 +388,8 @@ def _spot_empty(ncc: np.ndarray, frame: int, win: int, p: ImpactParams) -> bool:
 
 
 def _ball_stays(ncc: np.ndarray, frame: int, win: int, p: ImpactParams) -> bool:
-    a, b = max(0, frame - 2 * win), min(len(ncc), frame + 2 * win + 1)
-    seg = ncc[a:b]
-    return seg.size > 0 and bool(np.mean(seg >= p.presence_threshold) > 0.8)
+    """The ball rested at its spot before the sound and still does right after -> not our impact."""
+    after = ncc[frame + 1:frame + 1 + max(3, win // 2)]
+    before = ncc[max(0, frame - win):frame + 1]
+    return (after.size > 0 and bool(np.mean(after >= p.presence_threshold) > 0.8)
+            and bool(np.mean(before >= p.presence_threshold) > 0.5))

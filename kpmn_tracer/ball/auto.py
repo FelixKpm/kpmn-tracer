@@ -127,7 +127,7 @@ def _start_point(session: ClipSession, shot: Shot) -> tuple[np.ndarray | None, f
     if hint_src is None:
         return None, 2.0
     hint = session.source_to_proxy(np.array([hint_src]))[0]
-    g = session.reader.gray(shot.impact_frame)
+    g = session.reader.read(shot.impact_frame)
     loc = locate_ball(g, (float(hint[0]), float(hint[1])), search_r=max(6.0, 0.01 * max(g.shape)))
     if loc is None:
         return hint, 2.0

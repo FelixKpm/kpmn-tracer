@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from kpmn_tracer.render.style import TracerStyle
-from kpmn_tracer.trace.model import Shot
+from kpmn_tracer.trace.model import AnchorKind, Shot
 
 TOOLS = (
     ("select", "Auswählen", "V", "Punkte ziehen / auswählen"),
@@ -37,6 +37,7 @@ TOOLS = (
     ("land", "Landung", "L", "Landepunkt setzen"),
     ("point", "Zusatzpunkt", "P", "Zusätzlicher Kurvenpunkt (Draw/Fade)"),
     ("offset", "Korrektur", "K", "Tracer in diesem Frame verschieben (Keyframe)"),
+    ("ball", "Ball hier", "H", "Auf den Ball klicken: der Tracer-Kopf ist in diesem Frame genau dort"),
 )
 
 
@@ -308,7 +309,7 @@ class ShotPanel(QWidget):
         self.hint = QLabel("")
         self.hint.setWordWrap(True)
         self.hint.setStyleSheet("color:#aaa;")
-        tl.addWidget(self.hint, 3, 0, 1, 2)
+        tl.addWidget(self.hint, 4, 0, 1, 2)
         lay.addWidget(tbox)
 
         abox = QGroupBox("Automatik")
@@ -359,9 +360,9 @@ class ShotPanel(QWidget):
         self.launch.setToolTip("Wie steil der Ball startet (0 = gerade Linie zum Apex)")
         self.descent = dspin(0, 0.95, 0.05)
         self.descent.setToolTip("Wie steil der Ball fällt")
-        self.boost = dspin(0, 10, 0.1)
+        self.boost = dspin(0, 100, 0.5)
         self.boost.setToolTip("Tempo direkt nach dem Impact (Easing)")
-        self.decay = dspin(0.01, 1, 0.01)
+        self.decay = dspin(0.005, 1, 0.005, 3)
         self.decay.setToolTip("Wie schnell der Ball nach dem Abflug abbremst")
         self.late = dspin(0, 5, 0.1)
         self.late.setToolTip("Beschleunigung auf dem Weg nach unten")
@@ -419,7 +420,13 @@ class ShotPanel(QWidget):
             else:
                 self.cam_status.setText("nicht analysiert (Stativ angenommen)")
             self.duration.setValue(shot.flight_frames(fps) / fps)
-            self.duration.setEnabled(not shot.uses_anchor_times())
+            land = shot.anchor(AnchorKind.LAND)
+            self.duration.setEnabled(land is None or land.t is None)
+            pinned = sum(1 for a in shot.anchors if a.t is not None and a.kind == AnchorKind.POINT)
+            for w in (self.boost, self.decay, self.late):
+                w.setEnabled(pinned == 0)
+                w.setToolTip(w.toolTip().split(" (")[0] + (" (inaktiv: Timing folgt den „Ball hier“-Punkten)"
+                                                          if pinned else ""))
             self.launch.setValue(shot.shape.launch_steepness)
             self.descent.setValue(shot.shape.descent_steepness)
             self.boost.setValue(shot.timing.launch_boost)

@@ -261,3 +261,45 @@ erste Frame mit sichtbar ruhendem Ball wird automatisch gesucht.
 * Ergebnis: Ordner ≈ 730 MB, ZIP ≈ 320 MB. Größte Posten: FFmpeg, OpenCV-contrib (von MediaPipe
   erzwungen), Qt, MediaPipe.
 * Log-Datei und Presets liegen in `~/.kpmn_tracer` (bzw. `$KPMN_HOME`).
+
+## D32 – Erster echter Nutzer-Clip (IMG_2335.MOV): was nicht funktionierte und warum
+iPhone 4K-Hochformat, 30 fps, H.264 SDR, Stativ tief hinter dem Abschlag, gelber Range-Ball,
+volle Range mit Schlägen aus den Nachbarboxen. Der Ball fliegt fast gerade vom Betrachter weg:
+Bildschirmtempo ~240 px im 1. Frame, ~30 px nach 5 Frames, später 3–6 px (Faktor 50–80).
+1. **Manueller Tracer hing hinterher:** Das Easing konnte nur ~11:1 (Start-Tempo ≤ 10) –
+   physikalisch unmöglich für diesen Schlag (gemessen: ~400 px Rückstand im Steigflug, 4K).
+2. **Ton-Impact verworfen:** Mindestabstand 0,6 s zwischen Transienten ließ nur den lauteren
+   Nachbarschlag 0,42 s davor übrig → 0,25 s (reicht gegen Echos).
+3. **Ball nicht lokalisiert:** Gelb auf grünem Teppich ist in Graustufen kaum sichtbar; zudem gewann
+   das kleine, hellere weiße Tee gegen den großen Ball.
+4. **Präsenzsignal falsch „anwesend“:** Hinter dem Ball liegt helles, texturiertes Gras – der Kontrast
+   blieb nach dem Abflug hoch, die Fusion verwarf daraufhin sogar den richtigen Ton-Treffer.
+5. **Steigflug als Ausreißer verworfen:** Der globale Flugmodell-Filter im Tracker passt nicht auf
+   diesen nahen Schlag (starkes Abbremsen) und behielt nur den Abstieg.
+6. **Absturz** in `presence_signal`, sobald der Ball nicht in Frame 0 markiert ist (GUI-Normalfall).
+
+## D33 – Zeit-Pins („Ball hier“) statt immer extremerer Easing-Kurven
+Neues Werkzeug **H**: Klick auf den Ball in einem Frame setzt einen Anker *mit Zeit*. Sobald ein
+Anker zwischen Start und Landung eine Zeit hat, folgt das Timing monoton (PCHIP) diesen Punkten statt
+dem Easing; Anker ohne Zeit werden dafür nach ihrer aus dem Timing geschätzten Zeit einsortiert.
+Ein Klick genau auf die Apex-Markierung versieht den Apex selbst mit einer Zeit. Gemessen am
+Nutzer-Clip: Easing (Start-Tempo 10) ~400 px Fehler im Steigflug → 4 Pins 6 px, 8 Pins Ø 9 px über den
+ganzen Flug. Zusätzlich Easing-Grenzen erweitert (Start-Tempo bis 100, Abbremsen bis 0,005).
+Auto-Tracking ist eine Spezialisierung desselben Mechanismus (alle Anker haben Zeiten).
+
+## D34 – Robustere Ball-Lokalisierung und Präsenzmessung
+* Lokalisierung: Top-Hat je Farbkanal (Maximum), mehrere Schwellen, Bewertung mit √Fläche – große,
+  gelbe Bälle schlagen kleine, helle Tees/Glanzlichter.
+* Präsenz: Im Klick-Frame wird die Farbebene (Grau, B, G, R) gewählt, in der sich der Ball am
+  stärksten von der Umgebung abhebt; Score = min(Kontrast im Ballbereich ±2 px,
+  Template-Korrelation/0,8). Der Kontrast trennt winzige Bälle, die Korrelation große Bälle vor
+  texturiertem Gras (0,99 liegend → 0,25 weg).
+* Ein Treffer verlangt ≥ 1 s Abwesenheit (der Schläger beim Ansprechen verdeckt den Ball nur kurz);
+  Ton- und Video-Ereignisse werden 1:1 zugeordnet; „Ball blieb liegen“ wird nur direkt nach dem
+  Geräusch geprüft.
+
+## D35 – Tracker: lokale statt globaler Ausreißerprüfung
+Detektionen werden gegen die Kurve durch ihre zeitlichen Nachbarn geprüft (Startpunkt als fester
+Nachbar, Toleranz wächst mit der lokalen Geschwindigkeit); die Nachsuche interpoliert zwischen den
+Nachbardetektionen. Das globale Modell dient nur noch der Landeschätzung. Ergebnis beim Nutzer-Clip:
+58 Detektionen von Frame 709 (1 Frame nach dem Impact) bis 768 statt nur des Abstiegs.

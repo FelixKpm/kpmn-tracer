@@ -133,13 +133,23 @@ geklickt: mittlerer Fehler des gerenderten Tracer-Kopfs 0,1–0,5 px (gefordert 
   Composite „Normal“), Troubleshooting (VFR, HDR-Farben, Tracking/Impact schlägt fehl, FFmpeg),
   CLI, Dateien, Lizenzen.
 
+## Nachtrag 1 – erster echter Nutzer-Clip (IMG_2335.MOV)
+Gemeldet: manueller Tracer hängt bis zum Apex hinter dem Ball her, auch mit Start-Tempo 10.
+- Ursache analysiert (D32), sechs Fehler/Schwächen behoben (D33–D35).
+- Neues Werkzeug „Ball hier“ (H) für den manuellen Modus, Easing-Grenzen erweitert.
+- Vollautomatisch: „Ganzen Clip analysieren“ findet genau den einen Schlag (Frame 708, Ton + Video
+  + Abflug, Konfidenz 1,0); Probeschwung und Nachbarboxen liegen unter 50 %. Ball von Frame 709 bis
+  768 verfolgt, danach bis zur geschätzten Landung (805) extrapoliert.
+- Regressionstests: Zeit-Pins, zwei Schläge 0,42 s nacheinander, naher schneller Abflug,
+  Template-Frame ≠ 0.
+
 ## Definition of Done – Abgleich
 | Kriterium | Stand |
 |---|---|
 | Stativ- und Handheld-Clip importieren, Ball automatisch getrackt oder mit wenigen Klicks korrigiert | ✅ synthetisch (≤ 0,5 px) und an einem echten CC0-Clip geprüft; iPhone-Clips des Nutzers noch nicht |
 | Overlay mit Alpha liegt frame-genau über dem Original | ✅ Frameanzahl/Auflösung/Rate identisch, per Skript zurückgelegt geprüft; VFR wie Resolve (1:1) |
 | Batch-Verarbeitung einer Range-Session | ✅ GUI + CLI, Review, Export bestätigter Schläge |
-| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 97 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
+| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 102 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
 
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.
