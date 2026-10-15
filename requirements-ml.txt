@@ -1,0 +1,3 @@
+-r requirements.txt
+# optional ML ball detector (phase 6). Ultralytics is AGPL-3.0.
+ultralytics>=8.3
