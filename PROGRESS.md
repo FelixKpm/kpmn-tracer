@@ -9,7 +9,7 @@
 | 5 – Automatisches Ball-Tracking | ✅ fertig |
 | 6 – Optional: ML-Ballerkennung | ✅ fertig (optional, nicht Standard – D26) |
 | 7 – Workflow & Komfort | ✅ fertig |
-| 8 – Packaging & Doku | ⏳ offen |
+| 8 – Packaging & Doku | ✅ fertig |
 
 ## Phase 1 – erledigt
 - Projekt-Setup: venv, `requirements*.txt`, `pyproject.toml` (pytest), zentrales Logging.
@@ -124,6 +124,23 @@ geklickt: mittlerer Fehler des gerenderten Tracer-Kopfs 0,1–0,5 px (gefordert 
 **Tests:** `tests/test_batch.py` (Ordner mit 2 Clips × 2 Schlägen: alle Impacts exakt, Konfidenz
 ≥ 0,8, Review, Export nur bestätigter, CLI) und GUI-Tests für Presets, Text, Bestätigen, Batch-Fenster.
 
+## Phase 8 – erledigt
+- `packaging/kpmn_tracer.spec` + `tools/build_windows.py`: Ordner-Build mit `KPMN Tracer.exe` (GUI)
+  und `kpmn-tracer.exe` (CLI), FFmpeg und MediaPipe-Modelle im Build, ZIP für die Weitergabe.
+- Build-Prüfung: CLI-Selbsttest und GUI-Smoke-Test laufen automatisch nach jedem Build (beide grün).
+- App-Icon (`tools/make_icon.py`), Log in `~/.kpmn_tracer`.
+- README: Installation, Bedienung (manuell, automatisch, Batch), Resolve-Workflow (Overlay auf V2,
+  Composite „Normal“), Troubleshooting (VFR, HDR-Farben, Tracking/Impact schlägt fehl, FFmpeg),
+  CLI, Dateien, Lizenzen.
+
+## Definition of Done – Abgleich
+| Kriterium | Stand |
+|---|---|
+| Stativ- und Handheld-Clip importieren, Ball automatisch getrackt oder mit wenigen Klicks korrigiert | ✅ synthetisch (≤ 0,5 px) und an einem echten CC0-Clip geprüft; iPhone-Clips des Nutzers noch nicht |
+| Overlay mit Alpha liegt frame-genau über dem Original | ✅ Frameanzahl/Auflösung/Rate identisch, per Skript zurückgelegt geprüft; VFR wie Resolve (1:1) |
+| Batch-Verarbeitung einer Range-Session | ✅ GUI + CLI, Review, Export bestätigter Schläge |
+| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 97 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
+
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.
 - Masken werden für lange Bereiche komplett in den Speicher geladen (~230 KB/Key-Frame); für
@@ -134,5 +151,8 @@ geklickt: mittlerer Fehler des gerenderten Tracer-Kopfs 0,1–0,5 px (gefordert 
   bzw. per Klick auf den Schlag funktioniert der Ablauf.
 - Starker Luftwiderstand/Auftrieb wird nur im beobachteten Teil exakt wiedergegeben; die
   Extrapolation nach dem Verschwinden des Balls ist eine Schätzung (Landepunkt zum Nachkorrigieren).
-- Die GUI-Screenshots/Tests laufen im Offscreen-Modus; echte iPhone-Clips des Nutzers wurden noch nicht
+- Die GUI-Tests laufen im Offscreen-Modus; echte iPhone-Clips des Nutzers wurden noch nicht
   getestet (nur ein CC0-Clip, siehe D25).
+- Empfehlung für den nächsten Schritt: ein paar echte iPhone-Clips (Stativ + Hand, HDR, VFR,
+  Hoch- und Querformat) durch `kpmn-tracer.exe batch` laufen lassen; Ergebnisse/Fehlfälle zeigen, ob
+  Parameter nachgeschärft oder die optionale ML-Erkennung trainiert werden sollte.
