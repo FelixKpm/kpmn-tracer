@@ -225,6 +225,7 @@ class MainWindow(QMainWindow):
         act(editm, "Landung = aktueller Frame", self.set_land_frame, "O")
         act(editm, "Ausgewählten Punkt löschen", self.delete_selected, QKeySequence.StandardKey.Delete)
         act(editm, "Kamera tracken", lambda: self.track_camera(False), "T")
+        act(editm, "Impacts erkennen", self.detect_impacts, "D")
         for key, text, sc, _tip in TOOLS:
             act(editm, f"Werkzeug: {text}", lambda _c=False, k=key: self.set_tool(k), sc)
         act(viewm, "Ansicht einpassen", self.view.reset_view, "F")
@@ -264,6 +265,10 @@ class MainWindow(QMainWindow):
         sp.clearOffsets.connect(self.clear_offsets)
         sp.paramsChanged.connect(self.on_params_changed)
         sp.trackCamera.connect(self.track_camera)
+        sp.detectImpacts.connect(self.detect_impacts)
+        sp.adoptCandidate.connect(self.adopt_candidate)
+        sp.adoptAll.connect(self.adopt_all_candidates)
+        self.timeline.markerClicked.connect(lambda m: self.goto(int(m.frame)))
         self.style_panel.changed.connect(self.on_style_changed)
 
     # ================================================================ loading
@@ -397,6 +402,12 @@ class MainWindow(QMainWindow):
                 if s.camera.mode == "tracked":
                     tl.bad_frames = {s.camera.first_frame + k for k, c in enumerate(s.camera.confidence)
                                      if c < 0.5}
+        for c in self.candidates():
+            if any(abs(s.impact_frame - c.frame) <= 2 for s in p.shots):
+                continue
+            col = QColor(230, 80, 230) if c.confidence >= 0.5 else QColor(140, 90, 140)
+            tl.markers.append(Marker(c.frame, col, "triangle",
+                                     f"Impact-Kandidat {c.confidence:.0%} ({'+'.join(c.sources)})"))
         tl.update()
 
     # ================================================================ navigation
@@ -786,6 +797,108 @@ class MainWindow(QMainWindow):
         task.finished.connect(lambda m: (prog.close(), setattr(self, "_masks", m), self.refresh()))
         task.failed.connect(lambda msg: (prog.close(), QMessageBox.warning(self, "Personen-Maske", msg)))
         task.cancelled.connect(prog.close)
+
+    # ================================================================ impacts
+    def candidates(self):
+        from kpmn_tracer.ball.impact import ImpactCandidate
+
+        p = self.project
+        if p is None:
+            return []
+        return [ImpactCandidate.from_dict(d) for d in p.settings.get("impact_candidates", [])]
+
+    def _open_candidates(self):
+        p = self.project
+        shots = p.shots if p else []
+        return [c for c in self.candidates() if not any(abs(s.impact_frame - c.frame) <= 2 for s in shots)]
+
+    def _ball_hint(self) -> tuple[tuple[float, float] | None, int | None]:
+        """Resting ball position (source px) and a frame where it is visible."""
+        shot = self.current_shot()
+        if shot is not None and shot.anchor(AnchorKind.START) is not None:
+            a = shot.anchor(AnchorKind.START)
+            pos = shot.to_frame(np.array([[a.x, a.y]]), shot.impact_frame)[0]
+            return (float(pos[0]), float(pos[1])), shot.impact_frame
+        p = self.project
+        if p is not None and p.ball_start_hint is not None:
+            return p.ball_start_hint, self.frame
+        return None, None
+
+    def detect_impacts(self) -> None:
+        if self.session is None:
+            return
+        from kpmn_tracer.ball.impact import detect_impacts
+
+        sess = self.session
+        hint, hint_frame = self._ball_hint()
+        prog = QProgressDialog("Impacts werden gesucht …", "Abbrechen", 0, 1000, self)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+        prog.setMinimumDuration(300)
+        task = self.tasks.start(
+            lambda pr, cancel: detect_impacts(sess, hint, hint_frame, progress=pr, cancel=cancel))
+        task.progress.connect(lambda f: prog.setValue(int(f * 1000)))
+        prog.canceled.connect(task.cancel)
+
+        def done(cands) -> None:
+            prog.close()
+            self._snapshot()
+            sess.project.settings["impact_candidates"] = [c.to_dict() for c in cands]
+            sure = sum(c.confidence >= 0.5 for c in cands)
+            src = "Audio + Video" if hint else "nur Audio (Ball nicht markiert)"
+            self.shot_panel.auto_status.setText(f"{len(cands)} Kandidaten, {sure} sicher – {src}. "
+                                                "Magenta-Marker in der Timeline anklicken.")
+            self.on_project_changed()
+
+        task.finished.connect(done)
+        task.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, "Impact-Erkennung", msg)))
+        task.cancelled.connect(prog.close)
+
+    def _shot_from_candidate(self, c) -> Shot:
+        from kpmn_tracer.ball.impact import locate_ball
+
+        shot = Shot(impact_frame=c.frame, confidence=c.confidence, label="+".join(c.sources))
+        hint = c.ball_pos or (self.project.ball_start_hint if self.project else None)
+        if hint is not None and self.session is not None:
+            s = self.session
+            hp = s.source_to_proxy(np.array([hint]))[0]
+            g = s.reader.gray(c.frame)
+            loc = locate_ball(g, (float(hp[0]), float(hp[1])), search_r=max(12.0, 0.03 * max(g.shape)))
+            if loc is not None:
+                pos = s.proxy_to_source(np.array([[loc[0], loc[1]]]))[0]
+                shot.set_anchor(AnchorKind.START, float(pos[0]), float(pos[1]))
+        return shot
+
+    def adopt_candidate(self) -> None:
+        p = self.project
+        cands = self._open_candidates()
+        if p is None or not cands:
+            self.statusBar().showMessage("Kein offener Impact-Kandidat", 3000)
+            return
+        c = min(cands, key=lambda c: abs(c.frame - self.frame))
+        self._snapshot()
+        shot = self._shot_from_candidate(c)
+        p.shots.append(shot)
+        p.shots.sort(key=lambda s: s.impact_frame)
+        self.shot_idx = p.shots.index(shot)
+        self.goto(shot.impact_frame)
+        self.set_tool("apex" if shot.anchor(AnchorKind.START) else "start")
+        self.on_project_changed()
+
+    def adopt_all_candidates(self) -> None:
+        p = self.project
+        if p is None:
+            return
+        new = [c for c in self._open_candidates() if c.confidence >= 0.5]
+        if not new:
+            self.statusBar().showMessage("Keine neuen sicheren Kandidaten", 3000)
+            return
+        self._snapshot()
+        for c in new:
+            p.shots.append(self._shot_from_candidate(c))
+        p.shots.sort(key=lambda s: s.impact_frame)
+        self.shot_idx = 0
+        self.statusBar().showMessage(f"{len(new)} Schläge angelegt", 4000)
+        self.on_project_changed()
 
     # ================================================================ save / export
     def save(self) -> bool:
