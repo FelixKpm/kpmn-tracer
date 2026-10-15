@@ -220,3 +220,29 @@ Build:
   werden. Diese Datensätze zeigen meist große, nahe Bälle (Schlagposition, Grün) – für winzige Bälle
   im Flug sind eigene Daten aus dem Datensatz-Werkzeug passender; die öffentlichen Daten eignen sich
   zum Vortrainieren.
+
+## D27 – Presets im Benutzerordner, Positions-Preset normiert
+Styles, Positions-Preset und App-Standards liegen in `~/.kpmn_tracer` (überschreibbar mit
+`$KPMN_HOME`, Tests nutzen immer ein Temp-Verzeichnis). Das Positions-Preset speichert Ballstart und
+grobe Kurvenform in Bruchteilen von Breite/Höhe – derselbe Stativplatz passt so auch bei anderer
+Auflösung. Es wird beim Speichern eines Projekts automatisch aktualisiert (Auto-Ergebnisse vorher
+auf Start/Apex/Landung vereinfacht) und von „Neuer Schlag“ sowie dem Batch genutzt.
+
+## D28 – Text-Overlays mit Qt gerendert
+OpenCV-Schriften können keine Umlaute/Proportionalschrift und sehen unprofessionell aus. Die Labels
+werden mit `QPainter` in ein `QImage` gerendert (gecacht), entmultipliziert und in das RGBA-Overlay
+gemischt – damit sind sie automatisch im Alpha-Export enthalten. Ohne laufende GUI (CLI/Batch) wird
+eine Offscreen-`QGuiApplication` erzeugt; dafür muss `QT_QPA_FONTDIR` auf den System-Schriftordner
+zeigen (sonst nur Kästchen) – wird automatisch gesetzt.
+
+## D29 – Batch: Ergebnisse in den Projektdateien, Review über Bestätigen-Flag
+Der Batch speichert pro Clip die normale Projektdatei; das Review setzt nur `shot.confirmed`.
+Dadurch kann jeder Schlag jederzeit im Editor nachkorrigiert werden (Doppelklick im Review), und ein
+erneuter Batch-Lauf überschreibt bereits analysierte Clips nicht (außer mit `--reanalyze`, das nur
+bestätigte Schläge behält). Export: ein Overlay pro Clip mit allen bestätigten Schlägen. Ein
+fehlerhafter Clip bricht die Session nicht ab. Ballposition für den Batch: das Positions-Preset; der
+erste Frame mit sichtbar ruhendem Ball wird automatisch gesucht.
+
+## D30 – ruff als Linter
+`ruff` (pyflakes, pycodestyle, isort, bugbear) in `requirements-dev.txt`, Konfiguration in
+`pyproject.toml`; `B905` (zip strict) ist abgeschaltet, weil fast alle Fälle gleich lange Arrays sind.

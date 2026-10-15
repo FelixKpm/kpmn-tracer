@@ -8,7 +8,7 @@
 | 4 – Automatische Impact-Erkennung | ✅ fertig |
 | 5 – Automatisches Ball-Tracking | ✅ fertig |
 | 6 – Optional: ML-Ballerkennung | ✅ fertig (optional, nicht Standard – D26) |
-| 7 – Workflow & Komfort | ⏳ offen |
+| 7 – Workflow & Komfort | ✅ fertig |
 | 8 – Packaging & Doku | ⏳ offen |
 
 ## Phase 1 – erledigt
@@ -107,6 +107,22 @@ geklickt: mittlerer Fehler des gerenderten Tracer-Kopfs 0,1–0,5 px (gefordert 
 - Lizenzen von Ultralytics und öffentlichen Datensätzen in DECISIONS.md (D26).
 - Tests (`tests/test_ml.py`) laufen ohne Ultralytics (Fake-Modell mit identischem `predict`-Vertrag);
   einmalig mit echtem Ultralytics/CPU verifiziert (D26).
+
+## Phase 7 – erledigt
+- Batch (`kpmn_tracer/batch.py`): Ordner → alle Clips analysieren → Projektdateien + Thumbnails +
+  CSV-Übersicht → bestätigte Schläge exportieren. GUI: Batch-Fenster (Strg+B) mit Review-Liste
+  (Thumbnail mit Tracer, Konfidenz, Häkchen = bestätigt, Doppelklick = im Editor öffnen, „alle über
+  Schwelle bestätigen“, Export). CLI: `analyze`, `batch [--auto-confirm --export]`, `batch-export`.
+- Style-Presets (eingebaut + eigene, speichern/laden/löschen im Style-Panel).
+- Positions-Preset für den Stativplatz (Ballstart + Kurvenform, normiert), automatisch gemerkt.
+- Text-Einblendung pro Schlag (z. B. Schläger, Carry), animiert (Fade + Slide), Position am
+  Apex/Landepunkt oder in einer Ecke, im Alpha-Export enthalten.
+- Tastenkürzel für alle häufigen Aktionen, Übersicht mit F1; Einstellungsdialog (Strg+,).
+- Alle langen Analysen laufen im Hintergrund mit Fortschritt und Abbrechen.
+- Lint mit ruff, alle Checks grün.
+
+**Tests:** `tests/test_batch.py` (Ordner mit 2 Clips × 2 Schlägen: alle Impacts exakt, Konfidenz
+≥ 0,8, Review, Export nur bestätigter, CLI) und GUI-Tests für Presets, Text, Bestätigen, Batch-Fenster.
 
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.
