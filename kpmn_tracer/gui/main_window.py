@@ -223,6 +223,7 @@ class MainWindow(QMainWindow):
         act(editm, "Impact = aktueller Frame", self.set_impact, "I")
         act(editm, "Landung = aktueller Frame", self.set_land_frame, "O")
         act(editm, "Ausgewählten Punkt löschen", self.delete_selected, QKeySequence.StandardKey.Delete)
+        act(editm, "Kamera tracken", lambda: self.track_camera(False), "T")
         for key, text, sc, _tip in TOOLS:
             act(editm, f"Werkzeug: {text}", lambda _c=False, k=key: self.set_tool(k), sc)
         act(viewm, "Ansicht einpassen", self.view.reset_view, "F")
@@ -261,6 +262,7 @@ class MainWindow(QMainWindow):
         sp.jumpImpact.connect(self.jump_impact)
         sp.clearOffsets.connect(self.clear_offsets)
         sp.paramsChanged.connect(self.on_params_changed)
+        sp.trackCamera.connect(self.track_camera)
         self.style_panel.changed.connect(self.on_style_changed)
 
     # ================================================================ loading
@@ -607,20 +609,42 @@ class MainWindow(QMainWindow):
         shot.anchors.insert(idx, new)
 
     def _add_offset(self, shot: Shot, x: float, y: float) -> None:
+        """Correction keyframe: the tracer head should be at (x, y) in this frame.
+
+        If the correction has no neighbour keyframes yet, zero keyframes are added at
+        the closest well-tracked frames, so the correction stays local.
+        """
         assert self.session is not None and self.project is not None
         path = shot.path()
         if path is None:
             return
-        u = shot.head_u(self.frame, self.project.fps)
+        f = self.frame
+        u = shot.head_u(f, self.project.fps)
         ref = path.evaluate(u if u is not None else 0.0)
-        existing = [o for o in shot.offsets if o.frame != self.frame]
-        shot.offsets = existing
-        base = shot.to_frame(ref, self.frame)[0]  # includes interpolated offsets of other keys
+        shot.offsets = [o for o in shot.offsets if o.frame != f]
+        base = shot.to_frame(ref, f)[0] - shot.offset_at(f)
         target = self.session.proxy_to_source(np.array([[x, y]]))[0]
-        cur = shot.offset_at(self.frame)
-        d = target - base + cur
-        shot.offsets.append(OffsetKeyframe(self.frame, float(d[0]), float(d[1])))
+        d = target - base
+        if not any(o.frame < f for o in shot.offsets):
+            shot.offsets.append(OffsetKeyframe(self._good_neighbour(shot, f, -1), 0.0, 0.0))
+        if not any(o.frame > f for o in shot.offsets):
+            shot.offsets.append(OffsetKeyframe(self._good_neighbour(shot, f, 1), 0.0, 0.0))
+        shot.offsets.append(OffsetKeyframe(f, float(d[0]), float(d[1])))
         shot.offsets.sort(key=lambda o: o.frame)
+
+    def _good_neighbour(self, shot: Shot, f: int, direction: int) -> int:
+        """Nearest frame in ``direction`` with good camera tracking (fallback: 1/3 s away)."""
+        assert self.project is not None
+        n = self.project.frame_count
+        default = int(min(max(f + direction * max(2, round(self.project.fps / 3)), 0), n - 1))
+        if shot.camera.mode != "tracked":
+            return default
+        g = f + direction
+        while 0 <= g < n and shot.camera.covers(g):
+            if shot.camera.conf(g) >= 0.5:
+                return g
+            g += direction
+        return default
 
     def on_handle_moved(self, key: str, x: float, y: float) -> None:
         shot = self.current_shot()
@@ -677,6 +701,38 @@ class MainWindow(QMainWindow):
         self.project.style = self.style_panel.style_obj
         self.dirty = True
         self.refresh()
+
+    def track_camera(self, force: bool = False) -> None:
+        shot = self.current_shot()
+        if self.session is None or shot is None:
+            return
+        from kpmn_tracer.camera.shot_camera import analyze_shot_camera
+
+        sess, mask = self.session, self._mask_fn_proxy()
+        prog = QProgressDialog("Kamera wird getrackt …", "Abbrechen", 0, 1000, self)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+        prog.setMinimumDuration(300)
+        task = self.tasks.start(lambda pr, cancel: analyze_shot_camera(
+            sess, shot, mask, progress=pr, cancel=cancel, force_tracking=force))
+        task.progress.connect(lambda f: prog.setValue(int(f * 1000)))
+        prog.canceled.connect(task.cancel)
+
+        def done(cam) -> None:
+            prog.close()
+            if shot not in sess.project.shots:
+                return
+            self._snapshot()
+            shot.camera = cam
+            msg = "Stativ erkannt" if cam.mode == "tripod" else "Kamera getrackt"
+            self.statusBar().showMessage(msg, 5000)
+            self.on_project_changed()
+
+        task.finished.connect(done)
+        task.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, "Tracking fehlgeschlagen", msg)))
+        task.cancelled.connect(prog.close)
+
+    def _mask_fn_proxy(self):
+        return None  # person mask for feature exclusion (phase 3)
 
     # ================================================================ save / export
     def save(self) -> bool:

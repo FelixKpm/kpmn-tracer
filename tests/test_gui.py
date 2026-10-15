@@ -29,11 +29,13 @@ def window(app: QApplication, tripod_clip: tuple[Path, dict], tmp_path: Path):
     w = MainWindow()
     sess = ClipSession.open(tripod_clip[0], cache_root=tmp_path / "cache")
     sess.project.shots.clear()
+    sess.project.ball_start_hint = None
     w.set_session(sess)
     w.dirty = False
     yield w
     w.dirty = False
     w.close()
+    Path(str(tripod_clip[0]) + ".kpmntrace.json").unlink(missing_ok=True)
 
 
 def wait_until(app: QApplication, cond, timeout: float = 60) -> None:
@@ -88,7 +90,7 @@ def test_manual_tracer_workflow(window, app: QApplication, tripod_clip, tmp_path
     w.set_tool("offset")
     w.goto(50)
     w.on_view_click(100, 100)
-    assert len(w.current_shot().offsets) == 1
+    assert len(w.current_shot().offsets) == 3  # correction + two automatic zero keys
 
     # style change triggers re-render; save project
     w.style_panel.color.set_color("#00ff00")
@@ -125,3 +127,26 @@ def test_navigation_and_playback(window, app: QApplication) -> None:
     wait_until(app, lambda: w.frame >= 3, 10)
     w.toggle_play()
     assert not w.play_timer.isActive()
+
+
+def test_camera_tracking_and_local_corrections(window, app: QApplication) -> None:
+    w = window
+    w.goto(15)
+    w.add_shot()
+    for xy in ((320, 300), (330, 120), (350, 160)):
+        w.on_view_click(*xy)
+    w.track_camera(force=True)
+    wait_until(app, lambda: not w.tasks.busy() and w.current_shot().camera.analyzed, 60)
+    shot = w.current_shot()
+    assert shot.camera.mode == "tracked"
+    assert "getrackt" in w.shot_panel.cam_status.text()
+    w.set_tool("offset")
+    w.goto(50)
+    w.on_view_click(200, 100)
+    frames = [o.frame for o in shot.offsets]
+    assert len(frames) == 3 and frames[0] < 50 < frames[2]
+    assert np.allclose(shot.offset_at(frames[0] - 5), 0) and np.allclose(shot.offset_at(frames[2] + 5), 0)
+    # head is where we clicked (proxy == source here)
+    u = shot.head_u(50, w.project.fps)
+    head = shot.to_frame(shot.path().evaluate(u), 50)[0]
+    assert np.allclose(head, (200, 100), atol=1e-6)
