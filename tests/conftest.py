@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -12,6 +13,9 @@ from kpmn_tracer.io.ffmpeg_bin import SUBPROCESS_FLAGS, ffmpeg
 from kpmn_tracer.logging_setup import setup_logging
 
 setup_logging("WARNING")
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if os.path.isdir(os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")):
+    os.environ.setdefault("QT_QPA_FONTDIR", os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"))
 
 INDEX_BITS = 10
 BLOCK = 16
@@ -48,6 +52,14 @@ def write_index_video(path: Path, n: int, fps: str = "30", extra: list[str] | No
     proc.stdin.close()
     assert proc.wait() == 0
     return path
+
+
+@pytest.fixture(autouse=True)
+def isolated_presets(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Presets/settings go to a temp dir, never to the user's ~/.kpmn_tracer."""
+    home = tmp_path_factory.mktemp("kpmn_home")
+    monkeypatch.setenv("KPMN_HOME", str(home))
+    return home
 
 
 @pytest.fixture(scope="session")

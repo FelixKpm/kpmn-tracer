@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from kpmn_tracer.camera.homography import apply_h, corner_displacement, estimate, from_params, to_params
+from kpmn_tracer.camera.shot_camera import analyze_shot_camera
 from kpmn_tracer.camera.smoothing import SmoothParams, smooth_path, spike_outliers
 from kpmn_tracer.camera.tracker import CameraTracker, TrackParams
-from kpmn_tracer.camera.shot_camera import analyze_shot_camera
 from kpmn_tracer.session import ClipSession
 from kpmn_tracer.trace.model import AnchorKind, Shot
 

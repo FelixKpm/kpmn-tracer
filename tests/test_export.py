@@ -9,6 +9,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
+from verify_overlay import iter_frames, verify
 
 from kpmn_tracer.io.decode import count_frames
 from kpmn_tracer.io.export import ExportSettings, export
@@ -16,7 +17,6 @@ from kpmn_tracer.io.ffmpeg_bin import SUBPROCESS_FLAGS, ffprobe
 from kpmn_tracer.render.tracer import TracerRenderer
 from kpmn_tracer.session import ClipSession
 from kpmn_tracer.trace.model import Anchor, AnchorKind, Shot
-from verify_overlay import iter_frames, verify
 
 
 def shot_from_truth(truth: dict, step: int = 3) -> Shot:

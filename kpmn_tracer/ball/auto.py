@@ -189,7 +189,8 @@ def anchor_times(t_land: float, fps: float) -> np.ndarray:
     return ts[ts <= t_land]
 
 
-def apply_to_shot(result: AutoResult, shot: Shot, session: ClipSession, threshold: float = CONFIDENCE_THRESHOLD) -> None:
+def apply_to_shot(result: AutoResult, shot: Shot, session: ClipSession,
+                  threshold: float = CONFIDENCE_THRESHOLD) -> None:
     """Write the result into ``shot`` (same structure as manual tracing)."""
     fps = session.project.fps
     traj = result.trajectory

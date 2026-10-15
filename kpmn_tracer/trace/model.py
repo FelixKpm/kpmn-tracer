@@ -105,6 +105,7 @@ class Shot:
     confidence: float | None = None
     confirmed: bool = False
     label: str = ""
+    text: str = ""  # optional on-screen label (club, carry ...), "\n" for line breaks
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
 
     # ------------------------------------------------------------ anchors
@@ -226,6 +227,7 @@ class Shot:
         return {
             "id": self.id,
             "label": self.label,
+            "text": self.text,
             "impact_frame": self.impact_frame,
             "anchors": [a.to_dict() for a in self.anchors],
             "land_frame": self.land_frame,
@@ -244,6 +246,7 @@ class Shot:
         return cls(
             id=d.get("id") or uuid.uuid4().hex[:8],
             label=d.get("label", ""),
+            text=d.get("text", ""),
             impact_frame=int(d["impact_frame"]),
             anchors=[Anchor.from_dict(a) for a in d.get("anchors", [])],
             land_frame=d.get("land_frame"),

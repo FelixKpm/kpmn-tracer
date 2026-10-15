@@ -35,9 +35,18 @@ Tests: `.venv\Scripts\python -m pytest`
 | Strg+Z / Strg+Y | Rückgängig / Wiederholen |
 | Mausrad / rechte Maustaste ziehen | Zoom / Verschieben, Doppelklick rechts bzw. F = einpassen |
 
+## Automatik
+
+* **Ball tracken (B):** Schlag anlegen (N), im Impact-Frame auf den Ball klicken, B drücken.
+* **Ganzen Clip analysieren:** Ball einmal markieren → alle Schläge werden gefunden und getrackt.
+* **Batch (Strg+B):** Ordner einer Range-Session wählen → Review-Liste → bestätigte exportieren.
+
 ## Kommandozeile
 
 ```powershell
 python -m kpmn_tracer probe clip.mov
-python -m kpmn_tracer export clip.mov --format prores   # nutzt clip.mov.kpmntrace.json
+python -m kpmn_tracer analyze clip.mov --ball 960 1500           # alle Schläge finden + tracken
+python -m kpmn_tracer export clip.mov --format prores             # nutzt clip.mov.kpmntrace.json
+python -m kpmn_tracer batch D:\Range\Session --auto-confirm 0.8 --export prores
+python -m kpmn_tracer batch-export D:\Range\Session
 ```

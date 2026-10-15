@@ -9,30 +9,27 @@ import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QDragEnterEvent, QDropEvent, QKeySequence
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
     QPushButton,
     QScrollArea,
-    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from kpmn_tracer.gui.panels import TOOLS, ShotPanel, StylePanel
+from kpmn_tracer.gui.dialogs import EXPORT_LABELS, ExportDialog, SettingsDialog, ShortcutDialog
+from kpmn_tracer.gui.panels import TOOLS, ShotPanel, StylePanel, TextPanel
 from kpmn_tracer.gui.timeline import Marker, Timeline
 from kpmn_tracer.gui.video_view import Handle, VideoView
 from kpmn_tracer.gui.workers import TaskRunner
-from kpmn_tracer.io.export import FORMATS, ExportSettings, default_output, export
+from kpmn_tracer.io.export import ExportSettings, export
+from kpmn_tracer.project.presets import PositionPreset, PresetStore
 from kpmn_tracer.project.project_file import Project
 from kpmn_tracer.render.tracer import TracerRenderer, composite_over
 from kpmn_tracer.session import ClipSession
@@ -57,62 +54,6 @@ TOOL_HINTS = {
     "point": "Klick fügt einen Kurvenpunkt hinzu (z. B. für Draw/Fade).",
     "offset": "Klick = wo der Tracer-Kopf in diesem Frame sein soll (Korrektur-Keyframe).",
 }
-EXPORT_LABELS = {"prores": "ProRes 4444 mit Alpha (.mov)", "png": "PNG-Sequenz mit Alpha",
-                 "h264": "Eingebrannt H.264 (.mp4)", "h265": "Eingebrannt H.265 (.mp4)"}
-
-
-class ExportDialog(QDialog):
-    def __init__(self, project: Project, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Exportieren")
-        self.project = project
-        f = QFormLayout(self)
-        self.fmt = QComboBox()
-        for k in FORMATS:
-            self.fmt.addItem(EXPORT_LABELS[k], k)
-        self.path = QLineEdit()
-        browse = QPushButton("…")
-        browse.clicked.connect(self._browse)
-        row = QHBoxLayout()
-        row.addWidget(self.path)
-        row.addWidget(browse)
-        self.crf = QSpinBox()
-        self.crf.setRange(0, 51)
-        self.crf.setValue(18)
-        self.crf.setToolTip("Qualität für eingebrannte Exporte (kleiner = besser)")
-        f.addRow("Format", self.fmt)
-        f.addRow("Ziel", row)
-        f.addRow("CRF", self.crf)
-        info = QLabel(f"{project.width}×{project.height}, {project.frame_count} Frames @ "
-                      f"{float(project.video.target_fps):.3f} fps – identisch zum Clip.")
-        info.setStyleSheet("color:#999;")
-        f.addRow(info)
-        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
-        f.addRow(bb)
-        self.fmt.currentIndexChanged.connect(self._update_default)
-        self._update_default()
-
-    def _update_default(self) -> None:
-        fmt = self.fmt.currentData()
-        self.path.setText(str(default_output(self.project, fmt)))
-        self.crf.setEnabled(fmt in ("h264", "h265"))
-
-    def _browse(self) -> None:
-        fmt = self.fmt.currentData()
-        if fmt == "png":
-            d = QFileDialog.getExistingDirectory(self, "Zielordner", str(Path(self.path.text()).parent))
-            if d:
-                self.path.setText(d)
-        else:
-            p, _ = QFileDialog.getSaveFileName(self, "Ziel", self.path.text())
-            if p:
-                self.path.setText(p)
-
-    def settings(self) -> ExportSettings:
-        return ExportSettings(self.fmt.currentData(), Path(self.path.text()), self.crf.value())
-
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
@@ -132,11 +73,16 @@ class MainWindow(QMainWindow):
         self._overlay_buf: np.ndarray | None = None
         self._masks = None  # MaskTrack of the current clip (person segmentation)
         self.tasks = TaskRunner(self)
+        self.store = PresetStore()
+        self.defaults = self.store.load_defaults()
+        self._pending_goto: int | None = None
+        self.batch_window = None
 
         self.view = VideoView()
         self.timeline = Timeline()
         self.shot_panel = ShotPanel()
         self.style_panel = StylePanel()
+        self.text_panel = TextPanel()
         self.play_timer = QTimer(self)
         self.play_timer.timeout.connect(self._tick)
 
@@ -178,6 +124,7 @@ class MainWindow(QMainWindow):
         sl.setContentsMargins(4, 4, 4, 4)
         sl.addWidget(self.shot_panel)
         sl.addWidget(self.style_panel)
+        sl.addWidget(self.text_panel)
         sl.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidget(side)
@@ -213,15 +160,20 @@ class MainWindow(QMainWindow):
             return a
 
         act(filem, "Clip öffnen…", self.open_dialog, QKeySequence.StandardKey.Open)
+        act(filem, "Batch / Range-Session…", self.open_batch, "Ctrl+B")
         self.a_save = act(filem, "Projekt speichern", self.save, QKeySequence.StandardKey.Save)
         self.a_export = act(filem, "Exportieren…", self.export_dialog, "Ctrl+E")
         filem.addSeparator()
+        act(filem, "Einstellungen…", self.open_settings, "Ctrl+,")
         act(filem, "Beenden", self.close, "Ctrl+Q")
+        helpm = m.addMenu("&Hilfe")
+        act(helpm, "Tastenkürzel", self.show_shortcuts, "F1")
         self.a_undo = act(editm, "Rückgängig", self.undo, QKeySequence.StandardKey.Undo)
         self.a_redo = act(editm, "Wiederholen", self.redo, QKeySequence.StandardKey.Redo)
         editm.addSeparator()
         act(editm, "Neuer Schlag (Impact = Frame)", self.add_shot, "N")
         act(editm, "Impact = aktueller Frame", self.set_impact, "I")
+        act(editm, "Schlag bestätigen / aufheben", self.toggle_confirm, "C")
         act(editm, "Landung = aktueller Frame", self.set_land_frame, "O")
         act(editm, "Ausgewählten Punkt löschen", self.delete_selected, QKeySequence.StandardKey.Delete)
         act(editm, "Kamera tracken", lambda: self.track_camera(False), "T")
@@ -274,6 +226,11 @@ class MainWindow(QMainWindow):
         sp.simplify.connect(self.simplify_shot)
         self.timeline.markerClicked.connect(lambda m: self.goto(int(m.frame)))
         self.style_panel.changed.connect(self.on_style_changed)
+        self.style_panel.presetChosen.connect(self.apply_style_preset)
+        self.style_panel.presetSave.connect(self.save_style_preset)
+        self.style_panel.presetDelete.connect(self.delete_style_preset)
+        self.style_panel.set_presets(self.store.style_names(), self.defaults.last_style)
+        self.text_panel.changed.connect(self.on_text_changed)
 
     # ================================================================ loading
     def open_dialog(self) -> None:
@@ -297,7 +254,8 @@ class MainWindow(QMainWindow):
                               "Abbrechen", 0, 1000, self)
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
         dlg.setMinimumDuration(0)
-        worker = self.tasks.start(lambda prog, cancel: ClipSession.open(path, progress=prog, cancel=cancel))
+        mode = self.defaults.vfr_mode
+        worker = self.tasks.start(lambda prog, cancel: ClipSession.open(path, mode, progress=prog, cancel=cancel))
         worker.progress.connect(lambda f: dlg.setValue(int(f * 1000)))
         dlg.canceled.connect(worker.cancel)
         worker.finished.connect(lambda s: (dlg.close(), self.set_session(s)))
@@ -328,7 +286,12 @@ class MainWindow(QMainWindow):
         if p.video.is_hdr:
             warn.append(f"HDR ({p.video.hdr_format}) – Vorschau in SDR, Original unverändert")
         self.status_warn.setText("   ".join(warn))
-        if p.shots:
+        p.settings.setdefault("mask_model", self.defaults.mask_model)
+        if self._pending_goto is not None:
+            target, self._pending_goto = self._pending_goto, None
+            self.shot_idx = next((i for i, s in enumerate(p.shots) if s.impact_frame == target), self.shot_idx)
+            self.goto(target)
+        elif p.shots:
             self.goto(p.shots[0].impact_frame)
         self.on_project_changed(record=False)
         self._update_enabled()
@@ -378,12 +341,14 @@ class MainWindow(QMainWindow):
         if p is not None:
             self.shot_panel.set_shots(p.shots, self.shot_idx, p.fps)
             self.shot_panel.load_params(self.current_shot(), p.fps)
+            shot = self.current_shot()
+            self.text_panel.load(shot.text if shot else "", shot is not None, p.text_style)
         self._update_timeline()
         self.refresh()
 
     def _update_enabled(self) -> None:
         has = self.session is not None
-        for w in (self.export_btn, self.shot_panel, self.style_panel, self.a_save, self.a_export):
+        for w in (self.export_btn, self.shot_panel, self.style_panel, self.text_panel, self.a_save, self.a_export):
             w.setEnabled(has)
 
     def _update_timeline(self) -> None:
@@ -475,7 +440,7 @@ class MainWindow(QMainWindow):
             return
         p = s.project
         img = s.reader.read(self.frame)
-        r = TracerRenderer(s.reader.width, s.reader.height, p.fps, p.style)
+        r = TracerRenderer(s.reader.width, s.reader.height, p.fps, p.style, p.text_style)
         if self._overlay_buf is None or self._overlay_buf.shape[:2] != img.shape[:2]:
             self._overlay_buf = np.zeros(img.shape[:2] + (4,), np.uint8)
         ov = r.render(self._scaled_shots(), self.frame, self._occlusion_preview(), out=self._overlay_buf)
@@ -538,6 +503,10 @@ class MainWindow(QMainWindow):
         shot = Shot(impact_frame=self.frame)
         if p.ball_start_hint:
             shot.set_anchor(AnchorKind.START, *p.ball_start_hint)
+        else:
+            pre = self.store.load_position()  # tripod spot from earlier clips
+            if pre is not None:
+                pre.apply(shot, p.width, p.height, p.fps)
         p.shots.append(shot)
         p.shots.sort(key=lambda s: s.impact_frame)
         self.shot_idx = p.shots.index(shot)
@@ -735,7 +704,6 @@ class MainWindow(QMainWindow):
         if self.session is None or shot is None:
             return
         from kpmn_tracer.camera.shot_camera import analyze_shot_camera
-
         from kpmn_tracer.camera.tracker import track_range_for_shot
         from kpmn_tracer.segmentation.provider import compute_masks, tracking_mask_fn
 
@@ -920,8 +888,10 @@ class MainWindow(QMainWindow):
         from kpmn_tracer.analysis import AnalysisOptions
 
         st = self.session.project.settings if self.session else {}
-        return AnalysisOptions(use_person_mask=bool(st.get("use_person_mask", True)),
-                               detector=st.get("detector", "classic"), yolo_model=st.get("yolo_model"))
+        d = self.defaults
+        return AnalysisOptions(use_person_mask=bool(st.get("use_person_mask", d.use_person_mask)),
+                               detector=st.get("detector", d.detector),
+                               yolo_model=st.get("yolo_model", d.yolo_model))
 
     def auto_track_shot(self) -> None:
         shot, sess = self.current_shot(), self.session
@@ -929,9 +899,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Erst einen Schlag anlegen (N) und den Ball markieren", 4000)
             return
         if shot.anchor(AnchorKind.START) is None and sess.project.ball_start_hint is None:
-            QMessageBox.information(self, "Ball tracken", "Bitte im Impact-Frame zuerst mit „Start“ auf den Ball klicken.")
+            QMessageBox.information(self, "Ball tracken",
+                                    "Bitte im Impact-Frame zuerst mit „Start“ auf den Ball klicken.")
             return
-        from kpmn_tracer.analysis import AnalysisOptions, analyze_shot
+        from kpmn_tracer.analysis import analyze_shot
 
         work = Shot.from_dict(shot.to_dict())  # analyse a copy; apply on success (undo-able)
         opts = self._analysis_options()
@@ -964,7 +935,7 @@ class MainWindow(QMainWindow):
         sess = self.session
         if sess is None:
             return
-        from kpmn_tracer.analysis import AnalysisOptions, analyze_clip
+        from kpmn_tracer.analysis import analyze_clip
 
         hint, hint_frame = self._ball_hint()
         if hint is None:
@@ -1010,8 +981,26 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Speichern fehlgeschlagen", str(exc))
             return False
         self.dirty = False
+        self._remember_position()
         self.statusBar().showMessage(f"Gespeichert: {path.name}", 4000)
         return True
+
+    def _remember_position(self) -> None:
+        """Position preset for the tripod spot: last ball start and rough curve shape."""
+        p = self.project
+        if p is None:
+            return
+        shots = [s for s in p.shots if s.anchor(AnchorKind.START)]
+        if not shots:
+            return
+        cur = self.current_shot()
+        shot = cur if cur in shots else shots[-1]
+        if shot.source == "auto" and shot.is_complete():
+            shot = Shot.from_dict(shot.to_dict())
+            shot.simplify(p.fps)
+        pre = PositionPreset.from_shot(shot, p.width, p.height, p.fps)
+        if pre is not None:
+            self.store.save_position(pre)
 
     def _maybe_save(self) -> bool:
         if not self.dirty:
@@ -1032,7 +1021,7 @@ class MainWindow(QMainWindow):
         if not any(s.is_complete() for s in p.shots):
             QMessageBox.information(self, "Export", "Noch kein vollständiger Tracer (Start + Landung) gesetzt.")
             return
-        dlg = ExportDialog(p, self)
+        dlg = ExportDialog(p, self.defaults.export_format, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         self.run_export(dlg.settings())
@@ -1055,9 +1044,104 @@ class MainWindow(QMainWindow):
         worker = self.tasks.start(job)
         worker.progress.connect(lambda f: prog.setValue(int(f * 1000)))
         prog.canceled.connect(worker.cancel)
-        worker.finished.connect(lambda out: (prog.close(), self.statusBar().showMessage(f"Export fertig: {out}", 10000)))
+        worker.finished.connect(
+            lambda out: (prog.close(), self.statusBar().showMessage(f"Export fertig: {out}", 10000)))
         worker.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, "Export fehlgeschlagen", msg)))
         worker.cancelled.connect(prog.close)
+
+    # ================================================================ presets / text / confirm
+    def apply_style_preset(self, name: str) -> None:
+        if self.project is None:
+            return
+        try:
+            style = self.store.load_style(name)
+        except KeyError:
+            return
+        self._snapshot()
+        self.project.style = style
+        self.style_panel.set_style(style)
+        self.defaults.last_style = name
+        self.store.save_defaults(self.defaults)
+        self.dirty = True
+        self._preview_shots = None
+        self.refresh()
+
+    def save_style_preset(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        if self.project is None:
+            return
+        name, ok = QInputDialog.getText(self, "Style speichern", "Name des Presets:")
+        if ok and name.strip():
+            self.store.save_style(name.strip(), self.project.style)
+            self.style_panel.set_presets(self.store.style_names(), name.strip())
+
+    def delete_style_preset(self) -> None:
+        name = self.style_panel.presets.currentText()
+        if self.store.delete_style(name):
+            self.style_panel.set_presets(self.store.style_names())
+        else:
+            self.statusBar().showMessage("Eingebaute Presets können nicht gelöscht werden", 3000)
+
+    def on_text_changed(self) -> None:
+        p, shot = self.project, self.current_shot()
+        if p is None:
+            return
+        self._snapshot()
+        p.text_style = self.text_panel.text_style
+        if shot is not None:
+            shot.text = self.text_panel.text.text().strip()
+        self.dirty = True
+        self._preview_shots = None
+        self.refresh()
+
+    def toggle_confirm(self) -> None:
+        shot = self.current_shot()
+        if shot is None:
+            return
+        self._snapshot()
+        shot.confirmed = not shot.confirmed
+        self.statusBar().showMessage("Schlag bestätigt" if shot.confirmed else "Bestätigung aufgehoben", 3000)
+        self.on_project_changed()
+
+    # ================================================================ batch / settings / help
+    def open_batch(self) -> None:
+        from kpmn_tracer.gui.batch_window import BatchWindow
+
+        if self.batch_window is None:
+            self.batch_window = BatchWindow(self, self._analysis_options)
+            self.batch_window.openShot.connect(self.open_shot)
+        if self.session is not None and not self.batch_window.folder.text():
+            self.batch_window.folder.setText(str(Path(self.session.project.source).parent))
+        self.batch_window.show()
+        self.batch_window.raise_()
+
+    def open_shot(self, clip: str, impact_frame: int) -> None:
+        if self.session is not None and Path(self.session.project.source) == Path(clip):
+            self.shot_idx = next((i for i, s in enumerate(self.session.project.shots)
+                                  if s.impact_frame == impact_frame), self.shot_idx)
+            self.goto(impact_frame)
+            self.on_project_changed(record=False)
+            self.raise_()
+            return
+        self._pending_goto = impact_frame
+        self.open_path(Path(clip))
+        self.raise_()
+
+    def open_settings(self) -> None:
+        dlg = SettingsDialog(self.defaults, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self.defaults = dlg.values()
+            self.store.save_defaults(self.defaults)
+            if self.project is not None:
+                self.project.settings.update(use_person_mask=self.defaults.use_person_mask,
+                                             detector=self.defaults.detector,
+                                             yolo_model=self.defaults.yolo_model,
+                                             mask_model=self.defaults.mask_model)
+                self.dirty = True
+
+    def show_shortcuts(self) -> None:
+        ShortcutDialog(self.actions(), self).exec()
 
     def closeEvent(self, e) -> None:  # noqa: N802
         if not self._maybe_save():

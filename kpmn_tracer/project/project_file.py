@@ -16,6 +16,7 @@ from typing import Any
 from kpmn_tracer import __version__
 from kpmn_tracer.io.probe import VideoInfo
 from kpmn_tracer.render.style import TracerStyle
+from kpmn_tracer.render.text import TextStyle
 from kpmn_tracer.trace.model import Shot
 
 log = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class Project:
     frame_count: int  # frames of the normalised stream (== overlay frames)
     vfr_mode: str = "frames"
     style: TracerStyle = field(default_factory=TracerStyle)
+    text_style: TextStyle = field(default_factory=TextStyle)
     shots: list[Shot] = field(default_factory=list)
     ball_start_hint: tuple[float, float] | None = None  # last ball position (tripod preset)
     settings: dict[str, Any] = field(default_factory=dict)
@@ -74,6 +76,7 @@ class Project:
             "frame_count": self.frame_count,
             "vfr_mode": self.vfr_mode,
             "style": self.style.to_dict(),
+            "text_style": self.text_style.to_dict(),
             "shots": [s.to_dict() for s in self.shots],
             "ball_start_hint": list(self.ball_start_hint) if self.ball_start_hint else None,
             "settings": self.settings,
@@ -95,6 +98,7 @@ class Project:
             frame_count=int(d["frame_count"]),
             vfr_mode=d.get("vfr_mode", "frames"),
             style=TracerStyle.from_dict(d.get("style", {})),
+            text_style=TextStyle.from_dict(d.get("text_style", {})),
             shots=[Shot.from_dict(s) for s in d.get("shots", [])],
             ball_start_hint=tuple(hint) if hint else None,
             settings=d.get("settings", {}),

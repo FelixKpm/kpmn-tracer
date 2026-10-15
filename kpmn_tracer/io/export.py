@@ -36,6 +36,7 @@ class ExportSettings:
     crf: int = 18
     png_compression: int = 1
     frame_range: tuple[int, int] | None = None  # only for PNG: inclusive range
+    only_confirmed: bool = False  # batch: export only shots the user confirmed
 
 
 def fps_string(project: Project) -> str:
@@ -101,8 +102,8 @@ def export(
     if settings.fmt not in FORMATS:
         raise ValueError(f"unknown export format {settings.fmt}")
     out = Path(settings.out_path) if settings.out_path else default_output(project, settings.fmt)
-    renderer = TracerRenderer(project.width, project.height, project.fps, project.style)
-    shots = [s for s in project.shots if s.is_complete()]
+    renderer = TracerRenderer(project.width, project.height, project.fps, project.style, project.text_style)
+    shots = [s for s in project.shots if s.is_complete() and (s.confirmed or not settings.only_confirmed)]
     n = project.frame_count
     log.info("Exporting %s (%d frames, %dx%d @ %s) -> %s", settings.fmt, n,
              project.width, project.height, fps_string(project), out)

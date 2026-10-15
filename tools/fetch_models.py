@@ -16,9 +16,11 @@ log = logging.getLogger("fetch_models")
 BASE = "https://storage.googleapis.com/mediapipe-models"
 MODELS = {
     # full-body person segmentation (pose model with segmentation output)
-    "pose_landmarker_full.task": f"{BASE}/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
+    "pose_landmarker_full.task":
+        f"{BASE}/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
     # general segmentation incl. "person" class (fallback / comparison)
-    "selfie_multiclass_256x256.tflite": f"{BASE}/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite",
+    "selfie_multiclass_256x256.tflite":
+        f"{BASE}/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite",
     "deeplab_v3.tflite": f"{BASE}/image_segmenter/deeplab_v3/float32/1/deeplab_v3.tflite",
 }
 TARGET = Path(__file__).resolve().parent.parent / "vendor" / "models"

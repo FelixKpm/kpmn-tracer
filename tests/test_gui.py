@@ -34,6 +34,7 @@ def window(app: QApplication, tripod_clip: tuple[Path, dict], tmp_path: Path):
     w.dirty = False
     yield w
     w.dirty = False
+    w.session = None  # shared session fixtures stay open
     w.close()
     Path(str(tripod_clip[0]) + ".kpmntrace.json").unlink(missing_ok=True)
 
@@ -178,6 +179,7 @@ def test_occlusion_preview(app: QApplication, person_clip, tmp_path: Path) -> No
     assert visible_before == 255
     assert w._overlay_buf[..., 3][inner].max() <= 3
     w.dirty = False
+    w.session = None  # shared session fixtures stay open
     w.close()
 
 
@@ -200,6 +202,7 @@ def test_impact_detection_in_gui(app: QApplication, range_session_gui) -> None:
         a = s.anchor(AnchorKind.START)
         assert a is not None and abs(a.x - ball[0]) < 1.5 and abs(a.y - ball[1]) < 1.5
     w.dirty = False
+    w.session = None  # shared session fixtures stay open
     w.close()
 
 
@@ -228,4 +231,64 @@ def test_auto_track_and_simplify_in_gui(app: QApplication, range_session_gui) ->
     w.undo()
     assert w.current_shot().uses_anchor_times()
     w.dirty = False
+    w.session = None  # shared session fixtures stay open
     w.close()
+
+
+def test_presets_text_confirm_and_batch_window(app: QApplication, range_session_gui, isolated_presets,
+                                               tmp_path: Path) -> None:
+    from kpmn_tracer.gui.main_window import MainWindow
+    from kpmn_tracer.project.presets import PresetStore
+
+    sess, truth = range_session_gui
+    sess.project.shots.clear()
+    sess.project.ball_start_hint = None
+    w = MainWindow()
+    w.set_session(sess)
+    imp = truth["impact_frames"][0]
+    w.goto(imp)
+    w.add_shot()
+    ball = truth["frames"][imp]["balls"][0]["frame"]
+    for xy in (ball, (330, 60), (360, 120)):
+        w.on_view_click(*xy)
+    # style preset save / load
+    w.project.style.color = "#00ff00"
+    w.store.save_style("Mein Grün", w.project.style)
+    w.project.style.color = "#ff0000"
+    w.apply_style_preset("Mein Grün")
+    assert w.project.style.color == "#00ff00"
+    # text label is rendered into the overlay
+    w.text_panel.text.setText("PW · 95 m")
+    w.on_text_changed()
+    assert w.current_shot().text == "PW · 95 m"
+    w.goto(imp + 40)
+    with_text = int((w._overlay_buf[..., 3] > 0).sum())
+    w.current_shot().text = ""
+    w._preview_shots = None
+    w.refresh()
+    assert with_text > int((w._overlay_buf[..., 3] > 0).sum()) + 500
+    # confirm toggles
+    w.toggle_confirm()
+    assert w.current_shot().confirmed
+    # saving remembers the tripod position; a new shot in another clip starts there
+    assert w.save()
+    pre = PresetStore().load_position()
+    assert pre is not None and abs(pre.start[0] * 640 - ball[0]) < 1
+    w.project.ball_start_hint = None
+    w.goto(truth["impact_frames"][1])
+    w.add_shot()
+    s2 = w.current_shot()
+    assert s2.anchor(AnchorKind.START) is not None and s2.anchor(AnchorKind.LAND) is not None
+    # batch window shows the review list of a folder
+    w.open_batch()
+    bw = w.batch_window
+    from kpmn_tracer.batch import ClipResult, ShotReview
+
+    bw.show_results([ClipResult(sess.project.source, "x", [
+        ShotReview(sess.project.source, w.project.shots[0].id, 0, imp, 1.0, 0.9, False, None)])])
+    assert len(bw.items()) == 1
+    w.dirty = False
+    w.session = None  # shared session fixtures stay open
+    bw.close()
+    w.close()
+    Path(sess.project.source + ".kpmntrace.json").unlink(missing_ok=True)
