@@ -1,0 +1,70 @@
+"""Shared fixtures: synthetic clips are generated once per test session."""
+
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from kpmn_tracer.io.ffmpeg_bin import SUBPROCESS_FLAGS, ffmpeg
+from kpmn_tracer.logging_setup import setup_logging
+
+setup_logging("WARNING")
+
+INDEX_BITS = 10
+BLOCK = 16
+
+
+def encode_index_frame(i: int, w: int = 320, h: int = 180) -> np.ndarray:
+    """Frame whose top row of blocks encodes ``i`` in binary (robust to compression)."""
+    img = np.full((h, w, 3), 60, np.uint8)
+    for b in range(INDEX_BITS):
+        if (i >> b) & 1:
+            img[0:BLOCK, b * BLOCK:(b + 1) * BLOCK] = 255
+        else:
+            img[0:BLOCK, b * BLOCK:(b + 1) * BLOCK] = 0
+    return img
+
+
+def decode_index_frame(img: np.ndarray) -> int:
+    v = 0
+    for b in range(INDEX_BITS):
+        block = img[2:BLOCK - 2, b * BLOCK + 2:(b + 1) * BLOCK - 2]
+        if block.mean() > 128:
+            v |= 1 << b
+    return v
+
+
+def write_index_video(path: Path, n: int, fps: str = "30", extra: list[str] | None = None) -> Path:
+    cmd = [ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo",
+           "-pix_fmt", "bgr24", "-s", "320x180", "-r", fps, "-i", "-", *(extra or []),
+           "-c:v", "libx264", "-crf", "12", "-g", "30", "-pix_fmt", "yuv420p", str(path)]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, creationflags=SUBPROCESS_FLAGS)
+    assert proc.stdin is not None
+    for i in range(n):
+        proc.stdin.write(encode_index_frame(i).tobytes())
+    proc.stdin.close()
+    assert proc.wait() == 0
+    return path
+
+
+@pytest.fixture(scope="session")
+def media_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("media")
+
+
+@pytest.fixture(scope="session")
+def index_video(media_dir: Path) -> Path:
+    return write_index_video(media_dir / "index.mp4", 150)
+
+
+@pytest.fixture(scope="session")
+def tripod_clip(media_dir: Path) -> tuple[Path, dict]:
+    from synth import ShotSpec, SynthConfig, generate
+
+    cfg = SynthConfig(width=640, height=360, fps=30, n_frames=120,
+                      shots=[ShotSpec(impact_frame=15)], ref_frame=15, audio=True)
+    truth = generate(cfg, media_dir, "tripod")
+    return media_dir / "tripod.mp4", truth

@@ -1,0 +1,186 @@
+"""FFmpeg decode helpers: SDR/CFR/rotation-normalised analysis stream and proxy creation.
+
+The original clip is never modified. All analysis happens on a *proxy*: an
+8-bit SDR, constant-frame-rate, rotation-applied MJPEG file whose frame ``i``
+corresponds exactly to overlay frame ``i``.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+import subprocess
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+
+from kpmn_tracer.io.ffmpeg_bin import SUBPROCESS_FLAGS, ffmpeg
+from kpmn_tracer.io.probe import VideoInfo
+
+log = logging.getLogger(__name__)
+
+ProgressFn = Callable[[float], None]
+CancelFn = Callable[[], bool]
+
+DEFAULT_PROXY_LONG_SIDE = 1920
+
+
+class CancelledError(RuntimeError):
+    pass
+
+
+def tonemap_filter(info: VideoInfo) -> str | None:
+    """Filter that converts HLG/PQ HDR to 8-bit-ready BT.709 SDR, or None for SDR input."""
+    if not info.is_hdr:
+        return None
+    return (
+        "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,"
+        "tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
+    )
+
+
+def proxy_size(info: VideoInfo, long_side: int = DEFAULT_PROXY_LONG_SIDE) -> tuple[int, int]:
+    """Proxy (width, height): display orientation, longest side <= ``long_side``, even dims."""
+    w, h = info.width, info.height
+    scale = min(1.0, long_side / max(w, h))
+    pw = max(2, int(round(w * scale / 2)) * 2)
+    ph = max(2, int(round(h * scale / 2)) * 2)
+    return pw, ph
+
+
+def sdr_cfr_filters(
+    info: VideoInfo, size: tuple[int, int] | None = None, vfr_mode: str = "frames"
+) -> list[str]:
+    """Video filters producing the normalised analysis/composite base stream.
+
+    ``vfr_mode="frames"`` keeps every source frame and re-times frame ``n`` to
+    ``n / target_fps`` (this is how DaVinci Resolve conforms VFR clips, so the
+    overlay lines up 1:1). ``"resample"`` resamples by timestamp to CFR.
+    """
+    filters: list[str] = []
+    if vfr_mode == "frames":
+        filters.append(f"setpts=N/({_fps_str(info)}*TB)")
+    tm = tonemap_filter(info)
+    if tm:
+        filters.append(tm)
+    if size is not None and size != (info.width, info.height):
+        filters.append(f"scale={size[0]}:{size[1]}:flags=area")
+    return filters
+
+
+def _fps_str(info: VideoInfo) -> str:
+    return f"{info.target_fps.numerator}/{info.target_fps.denominator}"
+
+
+def rate_args(info: VideoInfo, vfr_mode: str = "frames") -> list[str]:
+    """Output rate arguments matching :func:`sdr_cfr_filters`."""
+    return ["-fps_mode", "cfr", "-r", _fps_str(info)]
+
+
+def expected_frames(info: VideoInfo, vfr_mode: str = "frames") -> int:
+    if info.is_vfr and vfr_mode == "resample":
+        return info.target_frame_count
+    return info.frame_count_src
+
+
+def cache_dir_for(source: Path, root: Path | None = None) -> Path:
+    st = source.stat()
+    key = hashlib.sha1(f"{source.resolve()}|{st.st_size}|{st.st_mtime_ns}".encode()).hexdigest()[:12]
+    base = root if root is not None else source.parent / ".kpmn_cache"
+    return base / f"{source.stem}_{key}"
+
+
+@dataclass
+class Proxy:
+    path: Path
+    width: int
+    height: int
+    frame_count: int
+
+
+def run_ffmpeg(
+    args: list[str],
+    total_frames: int | None = None,
+    progress: ProgressFn | None = None,
+    cancel: CancelFn | None = None,
+    stdin: bytes | None = None,
+) -> None:
+    """Run ffmpeg with progress reporting (``-progress pipe:1``) and cancellation."""
+    cmd = [ffmpeg(), "-hide_banner", "-nostdin", "-y", "-loglevel", "error",
+           "-progress", "pipe:1", *args]
+    log.debug("ffmpeg %s", " ".join(args))
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, creationflags=SUBPROCESS_FLAGS)
+    assert proc.stdout is not None
+    try:
+        for line in proc.stdout:
+            if cancel is not None and cancel():
+                proc.kill()
+                raise CancelledError("cancelled")
+            if line.startswith("frame=") and progress and total_frames:
+                try:
+                    progress(min(1.0, int(line.split("=", 1)[1]) / total_frames))
+                except ValueError:
+                    pass
+        _, err = proc.communicate()
+    except BaseException:
+        proc.kill()
+        proc.wait()
+        raise
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {err.strip()[-2000:]}")
+
+
+def count_frames(path: Path) -> int:
+    """Exact decoded frame count of a file (decodes the stream)."""
+    from kpmn_tracer.io.ffmpeg_bin import ffprobe
+
+    res = subprocess.run(
+        [ffprobe(), "-v", "error", "-count_frames", "-select_streams", "v:0",
+         "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True, creationflags=SUBPROCESS_FLAGS, check=True,
+    )
+    return int(res.stdout.strip().split(",")[0])
+
+
+def make_proxy(
+    info: VideoInfo,
+    out_dir: Path,
+    long_side: int = DEFAULT_PROXY_LONG_SIDE,
+    vfr_mode: str = "frames",
+    progress: ProgressFn | None = None,
+    cancel: CancelFn | None = None,
+) -> Proxy:
+    """Create (or reuse) the MJPEG analysis proxy for ``info``."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    size = proxy_size(info, long_side)
+    out = out_dir / f"proxy_{size[0]}x{size[1]}_{vfr_mode}.avi"
+    marker = out.with_suffix(".frames")
+    if out.exists() and marker.exists():
+        return Proxy(out, size[0], size[1], int(marker.read_text()))
+    filters = sdr_cfr_filters(info, size, vfr_mode)
+    filters.append("format=yuvj420p")
+    expected = expected_frames(info, vfr_mode)
+    tmp = out.with_name(out.stem + ".tmp.avi")
+    run_ffmpeg(
+        ["-i", info.path, "-map", "0:v:0", "-vf", ",".join(filters), *rate_args(info, vfr_mode),
+         "-c:v", "mjpeg", "-q:v", "2", "-an", str(tmp)],
+        total_frames=expected, progress=progress, cancel=cancel,
+    )
+    tmp.replace(out)
+    n = count_frames(out)
+    marker.write_text(str(n))
+    if n != expected:
+        log.warning("Proxy has %d frames, expected %d", n, expected)
+    log.info("Proxy ready: %s (%d frames)", out.name, n)
+    return Proxy(out, size[0], size[1], n)
+
+
+def extract_audio(info: VideoInfo, out_path: Path, sample_rate: int = 48000) -> Path | None:
+    """Extract mono PCM WAV for impact detection. Returns None if the clip has no audio."""
+    if not info.has_audio:
+        return None
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    run_ffmpeg(["-i", info.path, "-map", "0:a:0", "-ac", "1", "-ar", str(sample_rate),
+                "-c:a", "pcm_s16le", str(out_path)])
+    return out_path
