@@ -59,6 +59,7 @@ class CameraTrack:
     homographies: list[list[list[float]]] = field(default_factory=list)
     confidence: list[float] = field(default_factory=list)
     mode: str = "tripod"  # "tripod" (identity) or "tracked"
+    analyzed: bool = False  # False = never analysed (tripod assumed)
 
     def H(self, frame: int) -> np.ndarray:
         """frame -> reference homography (identity outside the tracked range / tripod)."""
