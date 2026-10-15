@@ -72,6 +72,8 @@ class SynthConfig:
     ball_radius_min: float = 1.0
     ball_gain: float = 1.0  # brightness of the ball (1 = white)
     audio: bool = False
+    audio_distractors: list[float] = field(default_factory=list)  # times of foreign hits (s)
+    club: bool = False  # dark club head sweeping through the ball at impact
     audio_rate: int = 48000
     vfr_jitter: bool = False  # write slightly irregular timestamps
     display_rotation: int = 0  # write rotation metadata (degrees, counter-clockwise)
@@ -259,7 +261,8 @@ def make_audio(cfg: SynthConfig, path: Path) -> list[float]:
     sig = rng.normal(0, 0.01, n)  # ambient noise
     times = []
     for shot in cfg.shots:
-        t0 = shot.impact_frame / cfg.fps - 0.5 / cfg.fps  # between frame impact-1 and impact
+        # contact happens between the impact frame (ball still at rest) and the next frame
+        t0 = (shot.impact_frame + 0.5) / cfg.fps
         i0 = int(round(t0 * sr))
         L = int(0.08 * sr)
         k = np.arange(L)
@@ -268,7 +271,15 @@ def make_audio(cfg: SynthConfig, path: Path) -> list[float]:
         if i0 < n:
             sig[i0:end] += click[: end - i0]
         times.append(t0)
-    # a few quieter distractor sounds (voices / other bays)
+    for td in cfg.audio_distractors:  # hits from the neighbouring bay (somewhat quieter)
+        i0 = int(round(td * sr))
+        L = int(0.08 * sr)
+        k = np.arange(L)
+        click = rng.normal(0, 1, L) * np.exp(-k / (0.006 * sr)) * 0.45
+        end = min(n, i0 + L)
+        if 0 <= i0 < n:
+            sig[i0:end] += click[: end - i0]
+    # a few quieter distractor sounds (voices)
     for _ in range(2):
         i0 = int(rng.integers(0, max(1, n - sr // 5)))
         L = int(0.15 * sr)
@@ -336,6 +347,15 @@ def generate(cfg: SynthConfig, out_dir: str | Path, name: str = "synthetic") -> 
             balls.append({"shot": si, "world": p.tolist(), "frame": fp.tolist(),
                           "radius": float(rad[fidx] * scale), "visible": visible,
                           "flying": bool(flying[fidx])})
+        if cfg.club:
+            for shot, (pos, rad, _fl) in zip(cfg.shots, tracks):
+                dtf = fidx - (shot.impact_frame + 0.5)  # frames relative to contact
+                if abs(dtf) <= 3 and not np.isnan(pos[shot.impact_frame]).any():
+                    b = apply_h(H, pos[shot.impact_frame])[0]
+                    r0 = rad[shot.impact_frame] * np.sqrt(abs(np.linalg.det(H[:2, :2])))
+                    cxy = (int(round(b[0] + dtf * 5 * r0)), int(round(b[1] + r0 * 0.3)))
+                    cv2.ellipse(frame, cxy, (max(2, int(2.2 * r0)), max(2, int(1.3 * r0))), 0, 0, 360,
+                                (45, 45, 50), -1)
         if cfg.person:
             m = person_mask(cfg, fidx, H)
             tex = person_texture(cfg, fidx)
