@@ -165,6 +165,9 @@ class ShotPanel(QWidget):
     paramsChanged = Signal()
     trackCamera = Signal(bool)  # force tracking (skip tripod detection)
     detectImpacts = Signal()
+    autoTrack = Signal()
+    analyzeClip = Signal()
+    simplify = Signal()
     adoptCandidate = Signal()
     adoptAll = Signal()
 
@@ -224,6 +227,12 @@ class ShotPanel(QWidget):
              "Schläge über Audio (Schlaggeräusch) und Video (Ball verlässt den Abschlagpunkt) finden"),
             ("Kandidat übernehmen", self.adoptCandidate, "Nächsten Kandidaten zum aktuellen Frame als Schlag anlegen"),
             ("Alle sicheren übernehmen", self.adoptAll, "Alle Kandidaten mit Konfidenz ≥ 50 % als Schläge anlegen"),
+            ("Ball tracken (B)", self.autoTrack,
+             "Flugbahn dieses Schlags automatisch verfolgen (Kamera, Maske, Ball)"),
+            ("Ganzen Clip analysieren", self.analyzeClip,
+             "Alle Impacts finden und jeden Schlag automatisch tracken"),
+            ("Vereinfachen", self.simplify,
+             "Auto-Ergebnis auf Start/Apex/Landung reduzieren (bequemer von Hand nachzubessern)"),
         )):
             b = QPushButton(text)
             b.setToolTip(tip)
@@ -232,7 +241,7 @@ class ShotPanel(QWidget):
         self.auto_status = QLabel("Tipp: zuerst den Ball mit „Start“ markieren – dann wird auch das Video ausgewertet.")
         self.auto_status.setWordWrap(True)
         self.auto_status.setStyleSheet("color:#aaa;")
-        al.addWidget(self.auto_status, 2, 0, 1, 2)
+        al.addWidget(self.auto_status, 3, 0, 1, 2)
         lay.addWidget(abox)
 
         cbox = QGroupBox("Kamera")

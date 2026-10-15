@@ -201,3 +201,31 @@ def test_impact_detection_in_gui(app: QApplication, range_session_gui) -> None:
         assert a is not None and abs(a.x - ball[0]) < 1.5 and abs(a.y - ball[1]) < 1.5
     w.dirty = False
     w.close()
+
+
+def test_auto_track_and_simplify_in_gui(app: QApplication, range_session_gui) -> None:
+    from kpmn_tracer.gui.main_window import MainWindow
+
+    sess, truth = range_session_gui
+    sess.project.shots.clear()
+    sess.project.settings["use_person_mask"] = False
+    w = MainWindow()
+    w.set_session(sess)
+    imp = truth["impact_frames"][0]
+    w.goto(imp)
+    w.add_shot()
+    w.on_view_click(*truth["frames"][imp]["balls"][0]["frame"])
+    w.auto_track_shot()
+    wait_until(app, lambda: not w.tasks.busy() and w.current_shot().source == "auto", 120)
+    shot = w.current_shot()
+    assert shot.confidence >= 0.5 and shot.uses_anchor_times()
+    assert len(w._handles()) <= 4  # dense auto anchors hidden, main ones shown
+    land = shot.flight_frames(sess.project.fps)
+    w.simplify_shot()
+    s2 = w.current_shot()
+    assert [a.kind for a in s2.anchors] == [AnchorKind.START, AnchorKind.APEX, AnchorKind.LAND]
+    assert abs(s2.flight_frames(sess.project.fps) - land) < 1e-6
+    w.undo()
+    assert w.current_shot().uses_anchor_times()
+    w.dirty = False
+    w.close()
