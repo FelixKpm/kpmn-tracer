@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Vendored binaries / models (fetched by tools/*.py)
+vendor/
+
+# Build output
+build/
+dist/
+
+# Local test media / caches
+.kpmn_cache/
+test_output/
+*.mov
+*.mp4
+*.avi
+!tests/data/**

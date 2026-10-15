@@ -1,0 +1,16 @@
+[project]
+name = "kpmn-tracer"
+version = "0.1.0"
+description = "Adds a TV-style ball tracer to golf range videos"
+requires-python = ">=3.11"
+
+[project.scripts]
+kpmn-tracer = "kpmn_tracer.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tools"]
+addopts = "-ra"
+markers = [
+    "slow: long running end-to-end tests (deselect with -m 'not slow')",
+]
