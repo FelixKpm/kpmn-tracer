@@ -1,0 +1,127 @@
+"""GUI smoke tests (offscreen Qt platform)."""
+
+from __future__ import annotations
+
+import os
+import time
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+from kpmn_tracer.session import ClipSession  # noqa: E402
+from kpmn_tracer.trace.model import AnchorKind  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def app() -> QApplication:
+    return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture()
+def window(app: QApplication, tripod_clip: tuple[Path, dict], tmp_path: Path):
+    from kpmn_tracer.gui.main_window import MainWindow
+
+    w = MainWindow()
+    sess = ClipSession.open(tripod_clip[0], cache_root=tmp_path / "cache")
+    sess.project.shots.clear()
+    w.set_session(sess)
+    w.dirty = False
+    yield w
+    w.dirty = False
+    w.close()
+
+
+def wait_until(app: QApplication, cond, timeout: float = 60) -> None:
+    t0 = time.time()
+    while not cond():
+        app.processEvents()
+        time.sleep(0.01)
+        if time.time() - t0 > timeout:
+            raise TimeoutError
+
+
+def test_manual_tracer_workflow(window, app: QApplication, tripod_clip, tmp_path: Path) -> None:
+    w = window
+    truth = tripod_clip[1]
+    w.goto(15)
+    w.add_shot()
+    shot = w.current_shot()
+    assert shot is not None and shot.impact_frame == 15
+    start = truth["frames"][15]["balls"][0]["frame"]
+    w.on_view_click(*start)  # tool switched to "start" by add_shot
+    assert w.tool == "apex"
+    w.on_view_click(330, 120)
+    assert w.tool == "land"
+    w.on_view_click(350, 160)
+    w.goto(80)
+    w.set_land_frame()
+    assert shot.is_complete() and shot.land_frame == 80
+    assert [a.kind for a in shot.anchors] == [AnchorKind.START, AnchorKind.APEX, AnchorKind.LAND]
+    assert np.allclose((shot.anchors[0].x, shot.anchors[0].y), start)
+
+    # the preview shows the tracer
+    w.goto(60)
+    assert w._overlay_buf is not None and w._overlay_buf[..., 3].max() == 255
+
+    # drag the apex handle, undo restores it
+    apex_before = (shot.anchors[1].x, shot.anchors[1].y)
+    w.on_handle_moved("a1", 300, 100)
+    w._end_drag()
+    assert w.current_shot().anchors[1].x == pytest.approx(300)
+    w.undo()
+    assert (w.current_shot().anchors[1].x, w.current_shot().anchors[1].y) == apex_before
+
+    # extra point + delete
+    w.set_tool("point")
+    w.on_view_click(340, 140)
+    assert len(w.current_shot().anchors) == 4
+    w.view.selected = "a2"
+    w.delete_selected()
+    assert len(w.current_shot().anchors) == 3
+
+    # offset keyframe moves the tracer in that frame
+    w.set_tool("offset")
+    w.goto(50)
+    w.on_view_click(100, 100)
+    assert len(w.current_shot().offsets) == 1
+
+    # style change triggers re-render; save project
+    w.style_panel.color.set_color("#00ff00")
+    w.style_panel._set("color", "#00ff00")
+    assert w.project.style.color == "#00ff00"
+    assert w.save()
+    assert Path(w.project.source + ".kpmntrace.json").exists()
+
+
+def test_export_runs_in_background(window, app: QApplication, tmp_path: Path) -> None:
+    from kpmn_tracer.io.export import ExportSettings
+
+    w = window
+    w.goto(15)
+    w.add_shot()
+    for xy in ((320, 300), (330, 120), (350, 160)):
+        w.on_view_click(*xy)
+    out = tmp_path / "gui_export.mov"
+    w.run_export(ExportSettings("prores", out))
+    wait_until(app, lambda: not w.tasks.busy() and out.exists(), 120)
+    from kpmn_tracer.io.decode import count_frames
+
+    assert count_frames(out) == w.project.frame_count
+
+
+def test_navigation_and_playback(window, app: QApplication) -> None:
+    w = window
+    w.goto(10_000)
+    assert w.frame == w.project.frame_count - 1
+    w.step(-5)
+    assert w.frame == w.project.frame_count - 6
+    w.goto(0)
+    w.toggle_play()
+    wait_until(app, lambda: w.frame >= 3, 10)
+    w.toggle_play()
+    assert not w.play_timer.isActive()
