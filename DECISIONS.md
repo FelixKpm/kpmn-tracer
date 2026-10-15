@@ -122,3 +122,24 @@ Impact … Landung + Halten + Ausblenden), inkrementell ergänzt und als
 `<cache>/masks_<modell>_s<stride>.npz` gespeichert (das Projekt merkt sich nur die Einstellungen).
 Tracking-Ausschluss: Wahrscheinlichkeit > 0,35, um 6 px dilatiert (plus 15 px im Feature-Detektor).
 Okklusion: weiche Matte (Rampe 0,3…0,7, Gauß-Feather ~2 px @1080).
+
+## D17 – Definition „Impact-Frame“
+Impact-Frame = letzter Frame, in dem der Ball noch ruhig am Startpunkt liegt (der Kontakt passiert
+zwischen ihm und dem nächsten Frame). Dort beginnt der Tracer mit Kopf am Startpunkt. Audio-Zeit
+*t* → Frame, der zum Zeitpunkt *t* angezeigt wird (letzter Frame mit pts ≤ t). Bei VFR im
+`frames`-Modus werden dafür die echten Paket-Zeitstempel verwendet (`ClipSession.frame_times`,
+im Cache), plus Startversatz der Audiospur.
+
+## D18 – Audio-Onsets: Hochpass + 1-ms-Log-Energie, Anstieg *und* Abstand zum Grundrauschen
+Schlaggeräusche sind kurz, laut und breitbandig. Hochpass 1,5 kHz entfernt Wind, Stimmen, Brummen.
+Kandidat = Anstieg ≥ 12 dB in 4 ms *und* Spitze ≥ 18 dB über dem gleitenden Median (1 s);
+mindestens 0,6 s Abstand (Echo/Nachhall wird verworfen). Onset-Zeit sample-genau: erstes Sample
+über 25 % der lokalen Spitze. Ergebnis auf synthetischen Signalen: < 1,5 ms Fehler.
+
+## D19 – Video-Signal: Kontrast des weißen Balls statt Korrelation
+Erster Ansatz (NCC eines Ball-Templates) trennt bei kleinen Bällen schlecht, weil die
+Hintergrundtextur mitkorreliert (abwesend ≈ 0,6 vs. anwesend 1,0). Stattdessen: Spitze des
+White-Top-Hat am Ballort relativ zum Klick-Frame. Anwesend ≈ 1,0, abwesend/Schläger ≈ 0,1. Die ROI
+folgt langsamer Kamerabewegung per Phasenkorrelation auf einer 320-px-Verkleinerung.
+Fusion: Audio + Video innerhalb ±0,25 s → Audio-Frame (sample-genau); nur Audio, Ball blieb liegen →
+verworfen (Nachbarbox); nur Audio, Abschlagpunkt leer → Konfidenz 0,15; nur Video → 0,55.
