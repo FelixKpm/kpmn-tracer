@@ -18,6 +18,7 @@ estimated landing) and the user only corrects them.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -133,10 +134,17 @@ def _start_point(session: ClipSession, shot: Shot) -> tuple[np.ndarray | None, f
     return np.array([loc[0], loc[1]]), float(loc[2])
 
 
+DetectorFactory = Callable[[FrameReader, Callable[[int], np.ndarray], tuple[int, int], int, object], BallDetector]
+
+
+def classic_factory(reader: FrameReader, H, size: tuple[int, int], n: int, mask) -> BallDetector:
+    return ClassicDetector(reader.gray, H, size, n, mask)
+
+
 def auto_track(
     session: ClipSession,
     shot: Shot,
-    detector: BallDetector | None = None,
+    detector: DetectorFactory | None = None,
     mask=None,
     params: BallTrackParams | None = None,
     progress: ProgressFn | None = None,
@@ -158,7 +166,7 @@ def auto_track(
     if shot.camera.mode == "tracked":
         last = min(last, shot.camera.first_frame + len(shot.camera.homographies))
     with FrameReader(session.reader.path, cache_size=24) as reader:
-        det = detector or ClassicDetector(reader.gray, H_proxy, (reader.width, reader.height), last, mask)
+        det = (detector or classic_factory)(reader, H_proxy, (reader.width, reader.height), last, mask)
         tracker = BallTracker(det, (reader.width, reader.height), p.fps, last, params)
         track = tracker.track(shot.impact_frame, (float(start[0]), float(start[1])), ball_r,
                               lambda f: report(0.9 * f), cancel)
