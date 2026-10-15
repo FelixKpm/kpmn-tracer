@@ -96,7 +96,7 @@ class VideoInfo:
     def summary(self) -> str:
         parts = [
             f"{self.width}x{self.height}",
-            f"{float(self.target_fps):.3f} fps" + (" (VFR→CFR)" if self.is_vfr else ""),
+            f"{float(self.target_fps):.3f} fps" + (" (VFR->CFR)" if self.is_vfr else ""),
             f"{self.target_frame_count} frames",
             f"{self.codec} {self.bit_depth}-bit",
         ]
