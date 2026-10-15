@@ -4,7 +4,7 @@
 |---|---|
 | 1 – Fundament: Import, Vorschau, manueller Tracer, Export | ✅ fertig |
 | 2 – Handheld: Kamerabewegung kompensieren | ✅ fertig |
-| 3 – Personen-Maske | ⏳ offen |
+| 3 – Personen-Maske | ✅ fertig |
 | 4 – Automatische Impact-Erkennung | ⏳ offen |
 | 5 – Automatisches Ball-Tracking | ⏳ offen |
 | 6 – Optional: ML-Ballerkennung | ⏳ offen |
@@ -51,7 +51,24 @@ mit Wackeln (8 px), Rotation, 20 % Zoom und Schwenk: mittlerer Tracer-Positionsf
 (gefordert ≤ 2 px). Weitere Tests: Ausreißer-Überbrückung, unbrauchbare Frames → niedrige Konfidenz,
 Stativ-Erkennung.
 
+## Phase 3 – erledigt
+- `segmentation/segmenter.py`: MediaPipe-Segmentierer (multiclass / pose / deeplab) hinter einem
+  `PersonSegmenter`-Protokoll (in Tests durch Ground-Truth bzw. Fakes ersetzbar).
+- `segmentation/mask_cache.py`: `MaskTrack` – jeder n-te Frame, Interpolation, NPZ-Cache,
+  Tracking-Ausschlussmaske und weiche Okklusions-Matte.
+- `segmentation/provider.py`: Masken pro Schlag-Bereich berechnen/laden, Funktionen für Tracker und
+  Export.
+- Kamera-Tracking ignoriert Features in der Personenmaske (GUI berechnet Masken automatisch vor dem
+  Tracking; abschaltbar über `settings.use_person_mask`).
+- Option „Tracer hinter Golfer“ pro Schlag: Vorschau und Export schneiden den Tracer weich aus.
+
+**Abnahme:** `tests/test_segmentation.py` – synthetischer Handheld-Clip mit großer, texturierter,
+bewegter „Person“: Kamera-Fehler ohne Maske ≈ 13 px, mit Maske ≈ 0,03 px. Okklusion im ProRes-Export
+und in der GUI-Vorschau geprüft (Alpha im Personenbereich 0, außerhalb unverändert).
+
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.
+- Masken werden für lange Bereiche komplett in den Speicher geladen (~230 KB/Key-Frame); für
+  Schlag-Bereiche unkritisch.
 - Die GUI-Screenshots/Tests laufen im Offscreen-Modus; echte iPhone-Clips wurden noch nicht getestet
   (keine Testclips im Repo).

@@ -150,3 +150,32 @@ def test_camera_tracking_and_local_corrections(window, app: QApplication) -> Non
     u = shot.head_u(50, w.project.fps)
     head = shot.to_frame(shot.path().evaluate(u), 50)[0]
     assert np.allclose(head, (200, 100), atol=1e-6)
+
+
+def test_occlusion_preview(app: QApplication, person_clip, tmp_path: Path) -> None:
+    from kpmn_tracer.gui.main_window import MainWindow
+    from kpmn_tracer.segmentation.mask_cache import MaskTrack
+    from kpmn_tracer.segmentation.provider import mask_file, settings
+
+    clip, _truth, masks = person_clip
+    sess = ClipSession.open(clip, cache_root=tmp_path / "c")
+    sess.project.style.glow_strength = 0
+    MaskTrack(80, (640, 360), 1, {i: m for i, m in enumerate(masks)}).save(mask_file(sess, *settings(sess)))
+    w = MainWindow()
+    w.set_session(sess)
+    w.goto(20)
+    w.add_shot()
+    for xy in ((100, 330), (420, 40), (600, 200)):
+        w.on_view_click(*xy)
+    w.goto(60)
+    visible_before = int(w._overlay_buf[..., 3][masks[60] > 0].max())
+    w.shot_panel.occlude.setChecked(True)  # -> on_params_changed -> masks already cached
+    app.processEvents()
+    assert w.current_shot().occlude
+    import cv2
+
+    inner = cv2.erode(masks[60], np.ones((7, 7), np.uint8)) > 0
+    assert visible_before == 255
+    assert w._overlay_buf[..., 3][inner].max() <= 3
+    w.dirty = False
+    w.close()

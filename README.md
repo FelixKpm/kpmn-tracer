@@ -11,6 +11,7 @@ versieht. Das Overlay wird mit Alpha-Kanal exportiert und in DaVinci Resolve üb
 py -3.13 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements-dev.txt
 .venv\Scripts\python tools\fetch_ffmpeg.py   # lädt ffmpeg + ffprobe nach vendor\ffmpeg
+.venv\Scripts\python tools\fetch_models.py   # lädt die MediaPipe-Modelle nach vendor\models
 .venv\Scripts\python -m kpmn_tracer           # startet die GUI
 ```
 

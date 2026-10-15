@@ -68,3 +68,15 @@ def tripod_clip(media_dir: Path) -> tuple[Path, dict]:
                       shots=[ShotSpec(impact_frame=15)], ref_frame=15, audio=True)
     truth = generate(cfg, media_dir, "tripod")
     return media_dir / "tripod.mp4", truth
+
+
+@pytest.fixture(scope="session")
+def person_clip(media_dir: Path) -> tuple[Path, dict, np.ndarray]:
+    from synth import ShotSpec, SynthConfig, generate
+
+    cfg = SynthConfig(width=640, height=360, fps=30, n_frames=80, shots=[ShotSpec(impact_frame=20)],
+                      ref_frame=20, shake_px=5, shake_rot_deg=0.4, person=True, person_scale=2.5,
+                      person_motion_px=25, crf=14)
+    truth = generate(cfg, media_dir, "person")
+    masks = np.load(media_dir / "person.masks.npz")["masks"]
+    return media_dir / "person.mp4", truth, masks

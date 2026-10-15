@@ -95,3 +95,30 @@ keine Bildecke mehr als 0,6 px (Proxy), gilt der Clip als Stativ und das Trackin
 Eine Korrektur verschiebt den projizierten Tracer in einem Frame. Damit sie nicht den ganzen Rest
 des Clips verschiebt, werden beim ersten Keyframe automatisch Null-Keyframes an den nächsten gut
 getrackten Frames davor/danach gesetzt; dazwischen wird linear interpoliert.
+
+## D14 – `opencv-contrib-python` statt `opencv-python`
+MediaPipe 1.x hängt von `opencv-contrib-python` ab. Beide Pakete installieren dasselbe `cv2`-Modul
+und überschreiben sich gegenseitig. Deshalb wird nur `opencv-contrib-python` (Obermenge) verwendet.
+
+## D15 – Personen-Segmentierung: MediaPipe „selfie_multiclass_256x256“ als Standard
+Verglichen auf einem echten Golf-Foto (Golfer von hinten, Durchschwung) und auf einer kleinen,
+weiter entfernten Person:
+
+| Modell | Golfer groß | Golfer klein (~40 px) | Zeit (640 px) |
+|---|---|---|---|
+| Pose-Landmarker (Segmentierungsausgabe) | sehr gut, ohne Schläger | **nicht erkannt** | ~45 ms |
+| DeepLab v3 (Klasse „person“) | gut, Ränder grob | **nicht erkannt** | ~60 ms |
+| Selfie multiclass (1 − Hintergrund) | sehr gut, **inkl. Schläger** | erkannt | ~160 ms |
+
+Multiclass ist das einzige Modell, das auch kleine Golfer findet, und der mitsegmentierte Schläger
+ist für beide Zwecke erwünscht (bewegt sich → nicht tracken; Tracer läuft dahinter). Modell ist
+über `project.settings["mask_model"]` umschaltbar (`pose`, `deeplab`). Modelle liegen in
+`vendor/models` (`tools/fetch_models.py`), werden nicht ins Git eingecheckt (Lizenz Apache 2.0).
+
+## D16 – Masken nur jeden 2. Frame, nur wo gebraucht, Cache als NPZ
+Segmentiert wird jeder `mask_stride`-te Frame (Standard 2) bei max. 640 px, dazwischen wird linear
+überblendet. Berechnet wird nur der Bereich, den ein Schlag braucht (Tracking-Bereich bzw.
+Impact … Landung + Halten + Ausblenden), inkrementell ergänzt und als
+`<cache>/masks_<modell>_s<stride>.npz` gespeichert (das Projekt merkt sich nur die Einstellungen).
+Tracking-Ausschluss: Wahrscheinlichkeit > 0,35, um 6 px dilatiert (plus 15 px im Feature-Detektor).
+Okklusion: weiche Matte (Rampe 0,3…0,7, Gauß-Feather ~2 px @1080).

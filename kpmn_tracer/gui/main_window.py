@@ -130,6 +130,7 @@ class MainWindow(QMainWindow):
         self._drag_snapshot = False
         self._preview_shots: list[Shot] | None = None
         self._overlay_buf: np.ndarray | None = None
+        self._masks = None  # MaskTrack of the current clip (person segmentation)
         self.tasks = TaskRunner(self)
 
         self.view = VideoView()
@@ -298,6 +299,9 @@ class MainWindow(QMainWindow):
         if self.session is not None:
             self.session.close()
         self.session = session
+        from kpmn_tracer.segmentation.provider import load_masks
+
+        self._masks = load_masks(session)
         p = session.project
         self.frame = 0
         self.shot_idx = 0 if p.shots else -1
@@ -472,7 +476,13 @@ class MainWindow(QMainWindow):
         self.view.info_text = conf
 
     def _occlusion_preview(self) -> np.ndarray | None:
-        return None  # person mask (phase 3)
+        shot, s = self.current_shot(), self.session
+        if s is None or self._masks is None or not any(x.occlude for x in s.project.shots):
+            return None
+        from kpmn_tracer.segmentation.mask_cache import soft_occlusion
+
+        _ = shot
+        return soft_occlusion(self._masks.get(self.frame, (s.reader.width, s.reader.height)), 1.5)
 
     def _handles(self) -> list[Handle]:
         s, shot = self.session, self.current_shot()
@@ -690,10 +700,13 @@ class MainWindow(QMainWindow):
         shot.timing = EasingTiming(sp.boost.value(), sp.decay.value(), sp.late.value())
         shot.shape.launch_steepness = sp.launch.value()
         shot.shape.descent_steepness = sp.descent.value()
+        newly_occluding = sp.occlude.isChecked() and not shot.occlude
         shot.occlude = sp.occlude.isChecked()
         if not shot.uses_anchor_times():
             shot.land_frame = shot.impact_frame + sp.duration.value() * p.fps
         self.on_project_changed()
+        if newly_occluding:
+            self.compute_masks_for_shot()
 
     def on_style_changed(self) -> None:
         if self.project is None:
@@ -708,17 +721,39 @@ class MainWindow(QMainWindow):
             return
         from kpmn_tracer.camera.shot_camera import analyze_shot_camera
 
-        sess, mask = self.session, self._mask_fn_proxy()
-        prog = QProgressDialog("Kamera wird getrackt …", "Abbrechen", 0, 1000, self)
+        from kpmn_tracer.camera.tracker import track_range_for_shot
+        from kpmn_tracer.segmentation.provider import compute_masks, tracking_mask_fn
+
+        sess = self.session
+        use_mask = bool(sess.project.settings.get("use_person_mask", True))
+        prog = QProgressDialog("Personen-Maske + Kamera-Tracking …", "Abbrechen", 0, 1000, self)
         prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(300)
-        task = self.tasks.start(lambda pr, cancel: analyze_shot_camera(
-            sess, shot, mask, progress=pr, cancel=cancel, force_tracking=force))
+
+        def job(pr, cancel):
+            p = sess.project
+            masks = None
+            if use_mask:
+                a, b = track_range_for_shot(shot.impact_frame, shot.flight_frames(p.fps), p.fps, p.frame_count)
+                try:
+                    masks = compute_masks(sess, a, b, progress=lambda f: pr(0.5 * f), cancel=cancel)
+                except (FileNotFoundError, ImportError, RuntimeError) as exc:
+                    log.warning("Person mask unavailable, tracking without: %s", exc)
+            mfn = tracking_mask_fn(masks, (sess.reader.width, sess.reader.height)) if masks else None
+            off = 0.5 if use_mask else 0.0
+            cam = analyze_shot_camera(sess, shot, mfn, progress=lambda f: pr(off + (1 - off) * f),
+                                      cancel=cancel, force_tracking=force)
+            return cam, masks
+
+        task = self.tasks.start(job)
         task.progress.connect(lambda f: prog.setValue(int(f * 1000)))
         prog.canceled.connect(task.cancel)
 
-        def done(cam) -> None:
+        def done(result) -> None:
+            cam, masks = result
             prog.close()
+            if masks is not None:
+                self._masks = masks
             if shot not in sess.project.shots:
                 return
             self._snapshot()
@@ -731,8 +766,26 @@ class MainWindow(QMainWindow):
         task.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, "Tracking fehlgeschlagen", msg)))
         task.cancelled.connect(prog.close)
 
-    def _mask_fn_proxy(self):
-        return None  # person mask for feature exclusion (phase 3)
+    def compute_masks_for_shot(self) -> None:
+        """Make sure person masks exist for the current shot (needed for occlusion)."""
+        shot, sess = self.current_shot(), self.session
+        if shot is None or sess is None:
+            return
+        from kpmn_tracer.segmentation.provider import _has_masks, compute_masks, shot_mask_range
+
+        a, b = shot_mask_range(sess, shot)
+        if _has_masks(self._masks, a, b):
+            self.refresh()
+            return
+        prog = QProgressDialog("Personen-Maske wird berechnet …", "Abbrechen", 0, 1000, self)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+        prog.setMinimumDuration(300)
+        task = self.tasks.start(lambda pr, cancel: compute_masks(sess, a, b, progress=pr, cancel=cancel))
+        task.progress.connect(lambda f: prog.setValue(int(f * 1000)))
+        prog.canceled.connect(task.cancel)
+        task.finished.connect(lambda m: (prog.close(), setattr(self, "_masks", m), self.refresh()))
+        task.failed.connect(lambda msg: (prog.close(), QMessageBox.warning(self, "Personen-Maske", msg)))
+        task.cancelled.connect(prog.close)
 
     # ================================================================ save / export
     def save(self) -> bool:
@@ -774,19 +827,24 @@ class MainWindow(QMainWindow):
     def run_export(self, settings: ExportSettings) -> None:
         assert self.session is not None
         snapshot = Project.from_dict(self.session.project.to_dict())
-        occl = self._occlusion_fn()
+        sess = self.session
         prog = QProgressDialog(f"Exportiere {EXPORT_LABELS[settings.fmt]} …", "Abbrechen", 0, 1000, self)
         prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(0)
-        worker = self.tasks.start(lambda pr, cancel: export(snapshot, settings, occl, pr, cancel))
+        def job(pr, cancel):
+            occl = None
+            if any(s.occlude for s in snapshot.shots):
+                from kpmn_tracer.segmentation.provider import occlusion_for_session
+
+                occl = occlusion_for_session(sess, cancel=cancel)
+            return export(snapshot, settings, occl, pr, cancel)
+
+        worker = self.tasks.start(job)
         worker.progress.connect(lambda f: prog.setValue(int(f * 1000)))
         prog.canceled.connect(worker.cancel)
         worker.finished.connect(lambda out: (prog.close(), self.statusBar().showMessage(f"Export fertig: {out}", 10000)))
         worker.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, "Export fehlgeschlagen", msg)))
         worker.cancelled.connect(prog.close)
-
-    def _occlusion_fn(self):
-        return None  # person mask (phase 3)
 
     def closeEvent(self, e) -> None:  # noqa: N802
         if not self._maybe_save():
