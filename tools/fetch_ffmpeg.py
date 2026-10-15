@@ -19,9 +19,10 @@ from pathlib import Path
 log = logging.getLogger("fetch_ffmpeg")
 
 # GPL build: contains prores_ks, libx264, libx265, zscale (HDR tonemapping).
+# "shared" variant: ffmpeg.exe/ffprobe.exe share the libav* DLLs (~half the size of two static exes).
 FFMPEG_URL = (
     "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/"
-    "ffmpeg-n8.1-latest-win64-gpl-8.1.zip"
+    "ffmpeg-n8.1-latest-win64-gpl-shared-8.1.zip"
 )
 TARGET = Path(__file__).resolve().parent.parent / "vendor" / "ffmpeg" / "bin"
 WANTED = ("ffmpeg.exe", "ffprobe.exe")
@@ -29,7 +30,7 @@ WANTED = ("ffmpeg.exe", "ffprobe.exe")
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    if all((TARGET / name).exists() for name in WANTED):
+    if all((TARGET / name).exists() for name in WANTED) and any(TARGET.glob("*.dll")):
         log.info("FFmpeg already present in %s", TARGET)
         return 0
     if sys.platform != "win32":
@@ -42,7 +43,7 @@ def main() -> int:
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         for member in zf.namelist():
             name = Path(member).name
-            if name in WANTED:
+            if name in WANTED or (Path(member).parent.name == "bin" and name.lower().endswith(".dll")):
                 with zf.open(member) as src, open(TARGET / name, "wb") as dst:
                     shutil.copyfileobj(src, dst)
                 log.info("Extracted %s", name)

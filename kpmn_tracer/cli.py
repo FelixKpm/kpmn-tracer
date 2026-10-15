@@ -131,6 +131,12 @@ def _analysis_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--yolo-model")
 
 
+def cmd_selftest(a: argparse.Namespace) -> int:
+    from kpmn_tracer.selftest import run
+
+    return 0 if run() else 1
+
+
 def cmd_gui(a: argparse.Namespace) -> int:
     from kpmn_tracer.gui.app import main as gui_main
 
@@ -168,6 +174,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--export", choices=["prores", "png", "h264", "h265"], help="export confirmed shots afterwards")
     _analysis_args(p)
     p.set_defaults(fn=cmd_batch)
+    p = sub.add_parser("selftest", help="check the installation (FFmpeg, models, export)")
+    p.set_defaults(fn=cmd_selftest)
     p = sub.add_parser("batch-export", help="export all confirmed shots of a folder")
     p.add_argument("folder")
     p.add_argument("--format", default="prores", choices=["prores", "png", "h264", "h265"])
@@ -185,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd is None:
         return cmd_gui(argparse.Namespace(clip=None))
-    setup_logging("DEBUG" if a.verbose else "INFO")
+    setup_logging("DEBUG" if a.verbose else ("WARNING" if a.cmd == "selftest" else "INFO"))
     return int(a.fn(a))
 
 

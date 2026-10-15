@@ -246,3 +246,18 @@ erste Frame mit sichtbar ruhendem Ball wird automatisch gesucht.
 ## D30 – ruff als Linter
 `ruff` (pyflakes, pycodestyle, isort, bugbear) in `requirements-dev.txt`, Konfiguration in
 `pyproject.toml`; `B905` (zip strict) ist abgeschaltet, weil fast alle Fälle gleich lange Arrays sind.
+
+## D31 – Packaging: PyInstaller-Ordner-Build mit zwei EXEs, FFmpeg „shared“, Selbsttest
+* **Ordner-Build statt One-File:** startet sofort (kein Entpacken bei jedem Start), weniger
+  Virenscanner-Fehlalarme, FFmpeg/Modelle liegen sichtbar daneben.
+* **Zwei Programme in einem Ordner:** `KPMN Tracer.exe` (GUI, ohne Konsole) und `kpmn-tracer.exe`
+  (CLI für Batch/Selbsttest) teilen sich `_internal`.
+* **FFmpeg „shared“-Build** (EXEs + gemeinsame DLLs, 193 MB statt 315 MB) wird *nach* PyInstaller
+  nach `_internal/ffmpeg` kopiert – als PyInstaller-Daten würden die DLLs analysiert und doppelt
+  abgelegt. `imageio_ffmpeg`, Torch und Ultralytics werden ausgeschlossen.
+* **Prüfung im Build-Skript:** `kpmn-tracer.exe selftest` (FFmpeg, Testclip erzeugen, Probe, Proxy,
+  Rendern, ProRes-Export mit Frameanzahl-Prüfung, Segmentierungsmodell) und
+  `KPMN Tracer.exe --smoke-test` (Hauptfenster startet und beendet sich), beides ohne Testmedien.
+* Ergebnis: Ordner ≈ 730 MB, ZIP ≈ 320 MB. Größte Posten: FFmpeg, OpenCV-contrib (von MediaPipe
+  erzwungen), Qt, MediaPipe.
+* Log-Datei und Presets liegen in `~/.kpmn_tracer` (bzw. `$KPMN_HOME`).
