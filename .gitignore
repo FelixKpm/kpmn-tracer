@@ -21,3 +21,9 @@ test_output/
 !tests/data/**
 runs/
 *.pt
+
+# user media / results / extracted builds
+*.kpmntrace.json
+kpmn_review/
+KPMN-Tracer-*-win64*/
+KPMN-Tracer-*-win64*.zip
