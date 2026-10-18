@@ -289,6 +289,7 @@ class ShotPanel(QWidget):
             row.addWidget(b, i // 2, i % 2)
         bl.addLayout(row)
         lay.addWidget(box)
+        self.shots_box = box
 
         tbox = QGroupBox("Werkzeug")
         tl = QGridLayout(tbox)
@@ -311,6 +312,7 @@ class ShotPanel(QWidget):
         self.hint.setStyleSheet("color:#aaa;")
         tl.addWidget(self.hint, 4, 0, 1, 2)
         lay.addWidget(tbox)
+        self.tool_box = tbox
 
         abox = QGroupBox("Automatik")
         al = QGridLayout(abox)
@@ -335,6 +337,7 @@ class ShotPanel(QWidget):
         self.auto_status.setStyleSheet("color:#aaa;")
         al.addWidget(self.auto_status, 3, 0, 1, 2)
         lay.addWidget(abox)
+        self.auto_box = abox
 
         cbox = QGroupBox("Kamera")
         cl = QGridLayout(cbox)
@@ -351,6 +354,7 @@ class ShotPanel(QWidget):
         cl.addWidget(self.cam_force, 0, 1)
         cl.addWidget(self.cam_status, 1, 0, 1, 2)
         lay.addWidget(cbox)
+        self.cam_box = cbox
 
         pbox = QGroupBox("Flugkurve")
         pf = QFormLayout(pbox)
@@ -376,6 +380,7 @@ class ShotPanel(QWidget):
         pf.addRow(self.occlude)
         self.occlude.toggled.connect(lambda _v: self._emit_params())
         lay.addWidget(pbox)
+        self.curve_box = pbox
         self._building = False
 
     def _emit_params(self) -> None:

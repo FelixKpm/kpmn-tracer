@@ -323,3 +323,31 @@ def test_still_image_and_project_reset(window, app: QApplication, tmp_path: Path
     assert p.style.color == "#123456"  # look is kept
     w.undo()
     assert len(w.project.shots) == 1
+
+
+def test_tour_highlights_every_step_and_runs_once(window, app: QApplication) -> None:
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    w = window
+    w.resize(1400, 900)
+    w.show()
+    app.processEvents()
+    w.maybe_start_tour()  # first start (isolated settings): the tour opens
+    t = w._tour
+    assert t is not None and t.isVisible()
+    for i in range(len(t.steps)):
+        t.show_step(i)
+        app.processEvents()
+        if t.steps[i].targets is not None:
+            assert not t.hole.isNull(), t.steps[i].title  # target found and visible (side panel scrolled)
+        assert t.rect().contains(t.bubble.geometry()), t.steps[i].title
+        assert not t.bubble.geometry().intersects(t.hole.adjusted(4, 4, -4, -4)), t.steps[i].title
+    t.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier))
+    app.processEvents()
+    assert w._tour is None and w.defaults.extra.get("tour_done")
+    w.maybe_start_tour()  # second start: no tour
+    assert w._tour is None
+    w.start_tour()  # Hilfe › Einführungstour
+    assert w._tour is not None
+    w._tour.finish(True)

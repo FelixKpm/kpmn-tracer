@@ -137,6 +137,7 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setMinimumWidth(410)
+        self.side_scroll = scroll
         from PySide6.QtWidgets import QDockWidget
 
         dock = QDockWidget("Bearbeiten", self)
@@ -179,6 +180,7 @@ class MainWindow(QMainWindow):
         act(extram, "Scorecard Studio öffnen", self.open_scorecard_studio, None)
         helpm = m.addMenu("&Hilfe")
         act(helpm, "Tastenkürzel", self.show_shortcuts, "F1")
+        act(helpm, "Einführungstour", self.start_tour, None)
         self.a_undo = act(editm, "Rückgängig", self.undo, QKeySequence.StandardKey.Undo)
         self.a_redo = act(editm, "Wiederholen", self.redo, QKeySequence.StandardKey.Redo)
         editm.addSeparator()
@@ -1266,6 +1268,26 @@ class MainWindow(QMainWindow):
                                              yolo_model=self.defaults.yolo_model,
                                              mask_model=self.defaults.mask_model)
                 self.dirty = True
+
+    def start_tour(self) -> None:
+        """Guided tour through the window (automatically once on the first start)."""
+        from kpmn_tracer.gui.tour import TourOverlay, main_window_steps
+
+        if getattr(self, "_tour", None) is not None:
+            return
+        self._tour = TourOverlay(self, main_window_steps(self), self.side_scroll)
+
+        def done(_completed: bool) -> None:
+            self._tour = None
+            self.defaults.extra["tour_done"] = True
+            self.store.save_defaults(self.defaults)
+
+        self._tour.finished.connect(done)
+        self._tour.start()
+
+    def maybe_start_tour(self) -> None:
+        if not self.defaults.extra.get("tour_done"):
+            self.start_tour()
 
     def show_shortcuts(self) -> None:
         ShortcutDialog(self.actions(), self).exec()

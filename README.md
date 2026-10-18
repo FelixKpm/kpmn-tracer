@@ -38,6 +38,9 @@ py -3.13 -m venv .venv
 
 ## Bedienung
 
+Beim ersten Start führt eine **Einführungstour** durch das Fenster (jederzeit wieder:
+*Hilfe › Einführungstour*; →/Enter weiter, ← zurück, Esc beendet).
+
 ### 1. Clip öffnen
 `Strg+O` oder Datei ins Fenster ziehen. Beim ersten Öffnen wird eine Vorschau-Kopie (Proxy) erstellt;
 die Statusleiste zeigt Auflösung, fps, Rotation, **VFR** und **HDR** an. Gibt es zum Clip schon ein
