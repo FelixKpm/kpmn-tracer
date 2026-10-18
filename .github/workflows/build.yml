@@ -44,7 +44,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: System libraries (Qt, fonts)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgl1 libfontconfig1 fonts-dejavu-core
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgl1 libgles2 libfontconfig1 fonts-dejavu-core
       - run: python -m pip install -r requirements-dev.txt && python -m pip install -e .
       - run: python tools/fetch_ffmpeg.py && python tools/fetch_models.py
       - run: python -m ruff check kpmn_tracer tests tools
@@ -86,7 +86,7 @@ jobs:
           cache: pip
       - name: System libraries (Qt, fonts)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgl1 libfontconfig1 fonts-dejavu-core
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgl1 libgles2 libfontconfig1 fonts-dejavu-core
       - name: Python packages
         run: python -m pip install -r requirements-dev.txt && python -m pip install -e .
       - name: FFmpeg + models
