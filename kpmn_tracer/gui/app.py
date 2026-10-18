@@ -22,6 +22,21 @@ def _log_file() -> Path:
     return home() / "kpmn_tracer.log"
 
 
+def _install_file_open_handler(app, win) -> None:
+    """macOS: files opened from the Finder ("Öffnen mit", Drag auf das Dock) arrive as events, not argv."""
+    from PySide6.QtCore import QEvent, QObject
+
+    class FileOpen(QObject):
+        def eventFilter(self, _obj, ev) -> bool:  # noqa: N802 - Qt API
+            if ev.type() == QEvent.Type.FileOpen and ev.file():
+                win.open_path(Path(ev.file()))
+                return True
+            return False
+
+    app._kpmn_file_open = FileOpen(app)  # keep a reference
+    app.installEventFilter(app._kpmn_file_open)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     smoke = "--smoke-test" in argv  # build check: open the window, quit after 1.5 s
@@ -41,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
 
         app.setWindowIcon(QIcon(str(icon)))
     win = MainWindow()
+    _install_file_open_handler(app, win)
     win.show()
     if smoke:
         from PySide6.QtCore import QTimer

@@ -1,0 +1,104 @@
+# Tests and release builds for Windows, macOS (Apple Silicon + Intel) and Linux.
+#
+# * push to dev/main: tests on Linux (cheap)
+# * manual run ("Run workflow"): tests + builds on all platforms, builds as artifacts
+# * tag v*: tests + builds on all platforms, attached to a draft GitHub release
+name: build
+
+on:
+  push:
+    branches: [dev, main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: "Run the test suite before building"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  QT_QPA_PLATFORM: offscreen
+  PYTHONUTF8: "1"
+
+jobs:
+  test-linux:
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: System libraries (Qt, fonts)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgl1 libfontconfig1 fonts-dejavu-core
+      - run: python -m pip install -r requirements-dev.txt && python -m pip install -e .
+      - run: python tools/fetch_ffmpeg.py && python tools/fetch_models.py
+      - run: python -m ruff check kpmn_tracer tests tools
+      - run: python -m pytest -q
+
+  build:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-2022, name: windows-x64 }
+          - { os: macos-14, name: macos-arm64 }
+          - { os: macos-15-intel, name: macos-x64 }
+          - { os: ubuntu-22.04, name: linux-x64 }
+    runs-on: ${{ matrix.os }}
+    name: build (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: System libraries (Qt, fonts)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgl1 libfontconfig1 fonts-dejavu-core
+      - name: Python packages
+        run: python -m pip install -r requirements-dev.txt && python -m pip install -e .
+      - name: FFmpeg + models
+        run: python tools/fetch_ffmpeg.py && python tools/fetch_models.py
+      - name: Tests
+        if: github.event_name != 'workflow_dispatch' || inputs.tests
+        run: python -m pytest -q
+      - name: Build + self test
+        id: build
+        shell: bash
+        run: python tools/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KPMN-Tracer-${{ matrix.name }}
+          path: ${{ steps.build.outputs.archive }}
+          compression-level: 0
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Attach to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -la artifacts
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --title "KPMN Tracer ${TAG#v}" --notes "Release notes folgen."
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber artifacts/*

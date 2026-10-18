@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from kpmn_tracer.gui.dialogs import EXPORT_LABELS, ExportDialog, SettingsDialog, ShortcutDialog
+from kpmn_tracer.gui.keys import native
 from kpmn_tracer.gui.panels import TOOLS, ShotPanel, StylePanel, TextPanel
 from kpmn_tracer.gui.timeline import Marker, Timeline
 from kpmn_tracer.gui.video_view import Handle, VideoView
@@ -117,7 +118,7 @@ class MainWindow(QMainWindow):
         transport.addWidget(self.frame_label)
         transport.addStretch(1)
         self.still_btn = QPushButton("Bild…")
-        self.still_btn.setToolTip("Aktuellen Frame mit Tracer als Bild speichern (Strg+Umschalt+E)")
+        self.still_btn.setToolTip(native("Aktuellen Frame mit Tracer als Bild speichern (Strg+Umschalt+E)"))
         transport.addWidget(self.still_btn)
         self.export_btn = QPushButton("Exportieren…")
         transport.addWidget(self.export_btn)
@@ -174,8 +175,9 @@ class MainWindow(QMainWindow):
         filem.addSeparator()
         self.a_reset = act(filem, "Projekt zurücksetzen…", self.reset_project, None)
         filem.addSeparator()
-        act(filem, "Einstellungen…", self.open_settings, "Ctrl+,")
-        act(filem, "Beenden", self.close, "Ctrl+Q")
+        # macOS moves these into the application menu ("KPMN Tracer › Einstellungen…/Beenden")
+        act(filem, "Einstellungen…", self.open_settings, "Ctrl+,").setMenuRole(QAction.MenuRole.PreferencesRole)
+        act(filem, "Beenden", self.close, "Ctrl+Q").setMenuRole(QAction.MenuRole.QuitRole)
         extram = m.addMenu("E&xtras")
         act(extram, "Scorecard Studio öffnen", self.open_scorecard_studio, None)
         helpm = m.addMenu("&Hilfe")
@@ -564,8 +566,8 @@ class MainWindow(QMainWindow):
             return
         r = QMessageBox.question(
             self, "Projekt zurücksetzen",
-            "Alle Schläge, die markierte Ballposition und die Impact-Kandidaten dieses Clips verwerfen?\n"
-            "Stil und Text-Einstellungen bleiben erhalten. (Rückgängig mit Strg+Z)")
+            native("Alle Schläge, die markierte Ballposition und die Impact-Kandidaten dieses Clips verwerfen?\n"
+                   "Stil und Text-Einstellungen bleiben erhalten. (Rückgängig mit Strg+Z)"))
         if r != QMessageBox.StandardButton.Yes:
             return
         self._snapshot()

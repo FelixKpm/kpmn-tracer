@@ -1,0 +1,28 @@
+KPMN Tracer für macOS
+=====================
+
+Installieren: "KPMN Tracer" auf den Ordner "Applications" (Programme) ziehen.
+
+Erster Start: Die App ist nicht bei Apple notarisiert (das kostet eine kostenpflichtige
+Entwickler-Mitgliedschaft). macOS blockiert sie deshalb beim ersten Öffnen.
+So öffnest du sie trotzdem (nur einmal nötig):
+
+  macOS 15 (Sequoia) und neuer:
+    1. KPMN Tracer per Doppelklick öffnen -> Meldung mit "Fertig" schließen.
+    2. Systemeinstellungen -> Datenschutz & Sicherheit -> ganz nach unten scrollen
+       -> bei "KPMN Tracer wurde blockiert" auf "Trotzdem öffnen" klicken.
+
+  macOS 12 bis 14:
+    Rechtsklick (oder ctrl-Klick) auf KPMN Tracer -> "Öffnen" -> "Öffnen".
+
+  Alternativ im Terminal:
+    xattr -dr com.apple.quarantine "/Applications/KPMN Tracer.app"
+
+Kommandozeile (optional):
+    "/Applications/KPMN Tracer.app/Contents/MacOS/kpmn-tracer" selftest
+
+-----
+
+KPMN Tracer for macOS - drag the app to Applications. The app is not notarized: on the first
+start use System Settings -> Privacy & Security -> "Open Anyway" (macOS 15+) or right-click ->
+Open (macOS 12-14), or run: xattr -dr com.apple.quarantine "/Applications/KPMN Tracer.app"

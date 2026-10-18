@@ -9,6 +9,7 @@ together with the tracer.
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from dataclasses import asdict, dataclass, fields
 from functools import lru_cache
@@ -22,9 +23,13 @@ from kpmn_tracer.trace.model import AnchorKind, Shot
 POSITIONS = ("apex", "land", "top_left", "top_right", "bottom_left", "bottom_right")
 
 
+# a font every installation of the platform has (Qt substitutes a similar one otherwise)
+DEFAULT_FONT = {"win32": "Segoe UI", "darwin": "Helvetica Neue"}.get(sys.platform, "DejaVu Sans")
+
+
 @dataclass
 class TextStyle:
-    font_family: str = "Segoe UI"
+    font_family: str = DEFAULT_FONT
     size: float = 44.0  # px @1080
     bold: bool = True
     color: str = "#ffffff"
@@ -56,10 +61,13 @@ _qt_lock = threading.Lock()
 
 
 def _font_dir_for_offscreen() -> None:
-    """The offscreen Qt platform does not see system fonts unless told where they are."""
-    if os.environ.get("QT_QPA_PLATFORM") == "offscreen" and "QT_QPA_FONTDIR" not in os.environ:
-        windir = os.environ.get("WINDIR", r"C:\Windows")
-        fonts = os.path.join(windir, "Fonts")
+    """The offscreen Qt platform on Windows does not see system fonts unless told where they are.
+
+    (macOS uses CoreText and Linux fontconfig in offscreen mode as well, no hint needed.)
+    """
+    if (sys.platform == "win32" and os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+            and "QT_QPA_FONTDIR" not in os.environ):
+        fonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
         if os.path.isdir(fonts):
             os.environ["QT_QPA_FONTDIR"] = fonts
 

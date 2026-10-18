@@ -44,6 +44,15 @@ def run(workdir: Path | None = None) -> bool:
     with _step("ffmpeg/ffprobe", results):
         for exe in (ffmpeg(), ffprobe()):
             subprocess.run([exe, "-version"], capture_output=True, check=True, creationflags=SUBPROCESS_FLAGS)
+    with _step("ffmpeg features", results):
+        def listing(kind: str) -> str:
+            return subprocess.run([ffmpeg(), "-hide_banner", f"-{kind}"], capture_output=True, text=True,
+                                  check=True, creationflags=SUBPROCESS_FLAGS).stdout
+
+        enc, flt = listing("encoders"), listing("filters")
+        missing = [n for n in ("prores_ks", "libx264", "libx265", "mjpeg", "aac") if f" {n} " not in enc]
+        missing += [n for n in ("zscale", "tonemap") if f" {n} " not in flt]
+        assert not missing, f"FFmpeg build lacks {', '.join(missing)}"
     with _step("create test clip", results):
         cmd = [ffmpeg(), "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", "640x360",
                "-r", "30", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(clip)]
