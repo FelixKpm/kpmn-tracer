@@ -15,12 +15,16 @@ on:
         description: "Run the test suite before building"
         type: boolean
         default: true
+      platforms:
+        description: "Platforms (comma separated): windows-x64, macos-arm64, macos-x64, linux-x64"
+        type: string
+        default: "windows-x64,macos-arm64,macos-x64,linux-x64"
 
 permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -32,6 +36,7 @@ jobs:
   test-linux:
     if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-22.04
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -43,19 +48,35 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt && python -m pip install -e .
       - run: python tools/fetch_ffmpeg.py && python tools/fetch_models.py
       - run: python -m ruff check kpmn_tracer tests tools
-      - run: python -m pytest -q
+      - run: python -m pytest -q --durations=15 --timeout=600 --timeout-method=thread
+
+  matrix:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    outputs:
+      include: ${{ steps.m.outputs.include }}
+    steps:
+      - id: m
+        env:
+          WANT: ${{ inputs.platforms || 'windows-x64,macos-arm64,macos-x64,linux-x64' }}
+        shell: python
+        run: |
+          import json, os
+          all_ = {"windows-x64": "windows-2022", "macos-arm64": "macos-14", "macos-x64": "macos-15-intel",
+                  "linux-x64": "ubuntu-22.04"}
+          want = [w.strip() for w in os.environ["WANT"].split(",") if w.strip() in all_]
+          inc = [{"name": w, "os": all_[w]} for w in want]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("include=" + json.dumps(inc) + "\n")
 
   build:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    needs: matrix
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { os: windows-2022, name: windows-x64 }
-          - { os: macos-14, name: macos-arm64 }
-          - { os: macos-15-intel, name: macos-x64 }
-          - { os: ubuntu-22.04, name: linux-x64 }
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     name: build (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +93,7 @@ jobs:
         run: python tools/fetch_ffmpeg.py && python tools/fetch_models.py
       - name: Tests
         if: github.event_name != 'workflow_dispatch' || inputs.tests
-        run: python -m pytest -q
+        run: python -m pytest -q --durations=15 --timeout=600 --timeout-method=thread
       - name: Build + self test
         id: build
         shell: bash
