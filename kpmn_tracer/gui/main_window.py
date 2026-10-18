@@ -116,6 +116,9 @@ class MainWindow(QMainWindow):
         self.frame_label.setMinimumWidth(260)
         transport.addWidget(self.frame_label)
         transport.addStretch(1)
+        self.still_btn = QPushButton("Bild…")
+        self.still_btn.setToolTip("Aktuellen Frame mit Tracer als Bild speichern (Strg+Umschalt+E)")
+        transport.addWidget(self.still_btn)
         self.export_btn = QPushButton("Exportieren…")
         transport.addWidget(self.export_btn)
         v.addLayout(transport)
@@ -166,15 +169,21 @@ class MainWindow(QMainWindow):
         act(filem, "Batch / Range-Session…", self.open_batch, "Ctrl+B")
         self.a_save = act(filem, "Projekt speichern", self.save, QKeySequence.StandardKey.Save)
         self.a_export = act(filem, "Exportieren…", self.export_dialog, "Ctrl+E")
+        self.a_still = act(filem, "Frame als Bild speichern…", self.save_still_dialog, "Ctrl+Shift+E")
+        filem.addSeparator()
+        self.a_reset = act(filem, "Projekt zurücksetzen…", self.reset_project, None)
         filem.addSeparator()
         act(filem, "Einstellungen…", self.open_settings, "Ctrl+,")
         act(filem, "Beenden", self.close, "Ctrl+Q")
+        extram = m.addMenu("E&xtras")
+        act(extram, "Scorecard Studio öffnen", self.open_scorecard_studio, None)
         helpm = m.addMenu("&Hilfe")
         act(helpm, "Tastenkürzel", self.show_shortcuts, "F1")
         self.a_undo = act(editm, "Rückgängig", self.undo, QKeySequence.StandardKey.Undo)
         self.a_redo = act(editm, "Wiederholen", self.redo, QKeySequence.StandardKey.Redo)
         editm.addSeparator()
         act(editm, "Neuer Schlag (Impact = Frame)", self.add_shot, "N")
+        act(editm, "Ballposition vom letzten Clip übernehmen", self.apply_last_position, None)
         act(editm, "Impact = aktueller Frame", self.set_impact, "I")
         act(editm, "Schlag bestätigen / aufheben", self.toggle_confirm, "C")
         act(editm, "Landung = aktueller Frame", self.set_land_frame, "O")
@@ -207,6 +216,7 @@ class MainWindow(QMainWindow):
         b["next10"].clicked.connect(lambda: self.step(10))
         b["play"].clicked.connect(self.toggle_play)
         self.export_btn.clicked.connect(self.export_dialog)
+        self.still_btn.clicked.connect(self.save_still_dialog)
         self.timeline.frameChanged.connect(self.goto)
         self.view.clicked.connect(self.on_view_click)
         self.view.handleMoved.connect(self.on_handle_moved)
@@ -299,6 +309,11 @@ class MainWindow(QMainWindow):
             self.goto(p.shots[0].impact_frame)
         self.on_project_changed(record=False)
         self._update_enabled()
+        if p.shots or p.ball_start_hint or p.settings.get("impact_candidates"):
+            n = len(p.shots)
+            self.statusBar().showMessage(
+                f"Gespeichertes Projekt geladen ({n} {'Schlag' if n == 1 else 'Schläge'}). "
+                "Neu anfangen: Datei › Projekt zurücksetzen", 12000)
 
     # ================================================================ state helpers
     @property
@@ -352,7 +367,8 @@ class MainWindow(QMainWindow):
 
     def _update_enabled(self) -> None:
         has = self.session is not None
-        for w in (self.export_btn, self.shot_panel, self.style_panel, self.text_panel, self.a_save, self.a_export):
+        for w in (self.export_btn, self.still_btn, self.shot_panel, self.style_panel, self.text_panel, self.a_save,
+                  self.a_export, self.a_still, self.a_reset):
             w.setEnabled(has)
 
     def _update_timeline(self) -> None:
@@ -508,17 +524,61 @@ class MainWindow(QMainWindow):
             return
         self._snapshot()
         shot = Shot(impact_frame=self.frame)
-        if p.ball_start_hint:
+        if p.ball_start_hint:  # ball marked earlier in *this* clip
             shot.set_anchor(AnchorKind.START, *p.ball_start_hint)
-        else:
-            pre = self.store.load_position()  # tripod spot from earlier clips
-            if pre is not None:
-                pre.apply(shot, p.width, p.height, p.fps)
         p.shots.append(shot)
         p.shots.sort(key=lambda s: s.impact_frame)
         self.shot_idx = p.shots.index(shot)
         self.set_tool("start" if not p.ball_start_hint else "apex")
         self.on_project_changed()
+
+    def apply_last_position(self) -> None:
+        """Ball start of the last saved clip (same tripod spot) - only on request.
+
+        Applied automatically it silently put the ball of an earlier clip into every
+        new one and sent the analysis to the wrong place (D36).
+        """
+        p = self.project
+        pre = self.store.load_position()
+        if p is None:
+            return
+        if pre is None:
+            self.statusBar().showMessage("Noch keine Ballposition gespeichert", 4000)
+            return
+        shot = self._ensure_shot()
+        if shot is None:
+            return
+        self._snapshot()
+        shot.set_anchor(AnchorKind.START, pre.start[0] * p.width, pre.start[1] * p.height)
+        p.ball_start_hint = (pre.start[0] * p.width, pre.start[1] * p.height)
+        self.set_tool("apex")
+        self.statusBar().showMessage("Ballposition übernommen – bitte im Impact-Frame prüfen", 6000)
+        self.on_project_changed()
+
+    def reset_project(self) -> None:
+        """Forget everything saved for this clip (shots, ball position, impact candidates)."""
+        s = self.session
+        if s is None:
+            return
+        r = QMessageBox.question(
+            self, "Projekt zurücksetzen",
+            "Alle Schläge, die markierte Ballposition und die Impact-Kandidaten dieses Clips verwerfen?\n"
+            "Stil und Text-Einstellungen bleiben erhalten. (Rückgängig mit Strg+Z)")
+        if r != QMessageBox.StandardButton.Yes:
+            return
+        self._snapshot()
+        old = s.project
+        fresh = Project(source=old.source, video=old.video, frame_count=old.frame_count, vfr_mode=old.vfr_mode)
+        fresh.style, fresh.text_style = old.style, old.text_style
+        fresh.settings = {k: v for k, v in old.settings.items()
+                          if k in ("mask_model", "use_person_mask", "detector", "yolo_model", "masks_cached")}
+        s.project = fresh
+        self.shot_idx = -1
+        self.shot_panel.auto_status.setText("")
+        self.set_tool("select")
+        self.dirty = True
+        self.on_project_changed()
+        self.statusBar().showMessage("Projekt zurückgesetzt", 4000)
 
     def delete_shot(self) -> None:
         p, shot = self.project, self.current_shot()
@@ -1052,6 +1112,46 @@ class MainWindow(QMainWindow):
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         self.run_export(dlg.settings())
+
+    def save_still_dialog(self) -> None:
+        """Current frame at full resolution with the tracer burned in (for picture posts)."""
+        s = self.session
+        if s is None:
+            return
+        from kpmn_tracer.io.still import default_still_path
+
+        p = s.project
+        start = str(default_still_path(p, self.frame, self.defaults.extra.get("still_ext", ".jpg")))
+        path, _ = QFileDialog.getSaveFileName(self, "Frame als Bild speichern", start,
+                                              "JPEG (*.jpg);;PNG (*.png)")
+        if not path:
+            return
+        out = Path(path)
+        if out.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+            out = out.with_suffix(".jpg")
+        self.defaults.extra["still_ext"] = out.suffix.lower()
+        self.store.save_defaults(self.defaults)
+        snapshot = Project.from_dict(p.to_dict())
+        frame = self.frame
+
+        def job(pr, cancel):
+            from kpmn_tracer.io.still import save_still
+
+            occl = None
+            if any(x.occlude for x in snapshot.shots):
+                from kpmn_tracer.segmentation.provider import occlusion_for_session
+
+                occl = occlusion_for_session(s, cancel=cancel)
+            return save_still(snapshot, frame, out, occl)
+
+        self._run_task("Bild wird gespeichert …", job,
+                       lambda o: self.statusBar().showMessage(f"Bild gespeichert: {o}", 10000))
+
+    def open_scorecard_studio(self) -> None:
+        from kpmn_tracer.scorecard import open_studio
+
+        if not open_studio():
+            QMessageBox.warning(self, "Scorecard Studio", "Der Browser konnte nicht geöffnet werden.")
 
     def run_export(self, settings: ExportSettings) -> None:
         assert self.session is not None

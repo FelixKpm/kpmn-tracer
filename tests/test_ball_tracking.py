@@ -168,3 +168,45 @@ def test_close_fast_launch_keeps_first_frames(media_dir: Path, tmp_path: Path) -
         assert np.linalg.norm(p.evaluate(shot.head_u(f, 30.0))[0] - tr[f]) < 6.0, f
     assert shot_error_px(shot, tr, 30.0) <= 3.0
     assert imp + 1 in first
+
+
+# ------------------------------------------------------------------ steep close launch (IMG_2366)
+
+# Ball positions measured in the user's clip IMG_2366 (proxy 1080x1920, frames since impact):
+# a wedge flying almost straight up, ~430 px in the first frame, ~70 px in the fifth.
+STEEP_START = (670.2, 1546.4)
+STEEP_BALL = {1: (706, 1127), 2: (718, 905), 3: (726, 768), 4: (734, 673), 5: (736, 602), 6: (741, 551),
+              7: (743, 508), 8: (744, 473), 9: (743, 446), 10: (743, 423), 11: (743, 404), 12: (742, 388),
+              13: (741, 375), 14: (739, 364), 15: (738, 354), 16: (736, 347), 17: (735, 340), 18: (733, 334)}
+# the club/hands leave the ball spot too, much slower (the old tracker chose them)
+STEEP_CLUB = {2: (691, 1182), 3: (694, 1096), 4: (692, 1037), 5: (691, 996), 6: (688, 967), 7: (684, 948),
+              8: (680, 933), 9: (676, 925), 10: (672, 920)}
+
+
+class _TableDetector:
+    def __init__(self, impact: int, tables: list[dict[int, tuple[float, float]]]) -> None:
+        self.impact, self.tables = impact, tables
+
+    def detect(self, frame: int, roi, expected_radius: float = 2.0, gap: int = 2):
+        from kpmn_tracer.ball.candidates import Candidate
+
+        x0, y0, x1, y1 = roi
+        out = []
+        for tab in self.tables:
+            p = tab.get(frame - self.impact)
+            if p is not None and x0 <= p[0] < x1 and y0 <= p[1] < y1:
+                out.append(Candidate(frame, float(p[0]), float(p[1]), 5.0, 60.0, 1))
+        return out
+
+
+def test_steep_close_launch_is_tracked_not_the_club() -> None:
+    from kpmn_tracer.ball.tracker import BallTracker
+
+    impact = 12
+    det = _TableDetector(impact, [STEEP_BALL, STEEP_CLUB])
+    tr = BallTracker(det, (1080, 1920), 30.0, 60).track(impact, STEEP_START, 8.9)
+    assert tr is not None
+    got = {f - impact for f in tr.points}
+    assert set(range(1, 19)) <= got  # whole ascent incl. the first frames and the part high above
+    assert all(np.hypot(*(np.array([tr.points[f + impact].x, tr.points[f + impact].y]) - STEEP_BALL[f])) < 1e-6
+               for f in STEEP_BALL)

@@ -40,11 +40,15 @@ py -3.13 -m venv .venv
 
 ### 1. Clip öffnen
 `Strg+O` oder Datei ins Fenster ziehen. Beim ersten Öffnen wird eine Vorschau-Kopie (Proxy) erstellt;
-die Statusleiste zeigt Auflösung, fps, Rotation, **VFR** und **HDR** an.
+die Statusleiste zeigt Auflösung, fps, Rotation, **VFR** und **HDR** an. Gibt es zum Clip schon ein
+gespeichertes Projekt (auch aus dem Batch), wird es geladen – die Statusleiste sagt das. Neu anfangen:
+*Datei › Projekt zurücksetzen* (Schläge, Ballposition und Impact-Kandidaten werden verworfen, der
+Style bleibt).
 
 ### 2a. Automatisch (empfohlen)
 1. Zu einem Frame gehen, in dem der Ball ruhig liegt, **N** (neuer Schlag) drücken und auf den Ball
-   klicken.
+   klicken. Gleicher Stativ-Platz wie beim letzten Clip? *Bearbeiten › Ballposition vom letzten Clip
+   übernehmen* setzt den Startpunkt (bitte kurz prüfen) – automatisch passiert das nicht mehr.
 2. **B** – *Ball tracken*: Personen-Maske, Kamerabewegung und Ballflug werden analysiert.
    Oder *Ganzen Clip analysieren*: alle Schläge im Clip werden gefunden und getrackt.
 3. Ergebnis prüfen (Leertaste = abspielen). Bei geringer Konfidenz sind Start, Apex und Landung
@@ -79,11 +83,18 @@ Stehenbleiben und Ausblenden nach der Landung. Eigene Styles als **Preset** spei
 
 Das Overlay hat immer dieselbe Auflösung, dieselbe Bildrate und **dieselbe Frameanzahl** wie der Clip.
 
+**Einzelbild für Bild-Beiträge** (`Strg+Umschalt+E` oder Knopf *Bild…*): speichert den aktuellen Frame
+in Originalauflösung (z. B. 2160×3840) als JPEG oder PNG – mit Tracer und Text, HDR wie beim
+eingebrannten Export nach SDR umgerechnet. Tipp: kurz vor der Landung, dann ist die ganze Flugkurve
+zu sehen.
+
 ### 6. Range-Session im Batch (`Strg+B`)
-1. Einmal einen Schlag im Editor setzen und speichern – die Ballposition am Stativplatz wird als
-   **Positions-Preset** gemerkt.
+1. Einmal einen Schlag im Editor setzen und speichern – die Ballposition am Stativplatz wird
+   gemerkt. Im Batch-Fenster *Ballposition vom letzten Clip verwenden* nur einschalten, wenn alle
+   Clips vom selben Stativ-Platz stammen (sonst werden Impacts nur über den Ton gefunden).
 2. Batch-Fenster: Ordner wählen → *Analysieren*. Jeder Schlag erscheint als Bild mit Tracer und
-   Konfidenz.
+   Konfidenz. Bereits analysierte Clips werden übersprungen, außer *Bereits analysierte Clips neu
+   berechnen* ist an (bestätigte Schläge bleiben).
 3. Häkchen setzen (oder *Alle darüber bestätigen*), unsichere per Doppelklick im Editor korrigieren.
 4. *Bestätigte exportieren* – ein Overlay pro Clip.
 
@@ -100,7 +111,20 @@ Das Overlay hat immer dieselbe Auflösung, dieselbe Bildrate und **dieselbe Fram
 | Entf | Ausgewählten Zusatzpunkt löschen |
 | Strg+Z / Strg+Y | Rückgängig / Wiederholen |
 | Strg+S · Strg+E · Strg+B | Speichern · Exportieren · Batch |
+| Strg+Umschalt+E | Frame als Bild speichern |
 | Mausrad / rechte Taste ziehen / F | Zoom / Verschieben / Einpassen |
+
+### 7. Scorecard Studio (*Extras › Scorecard Studio öffnen*)
+Eigenständiges Werkzeug für Scorecard-Grafiken, unabhängig vom Tracer. Öffnet sich im Browser
+(`kpmn_tracer/scorecard/studio.html`, funktioniert auch ohne die App):
+* Runde eintragen: Zählspiel, Stableford (mit Vorgabe), Scramble, Lochspiel, optional Turnier.
+* Formate: Beitrag 4:5, Story 9:16, transparente Einblendung der Runde oder eines Lochs → PNG.
+* **Design**: Vorlagen *NightRange · teeoff.kpmn*, *Clubhaus*, *Fairway*, *Minimal*, *Mono*.
+  Farben, Schrift, Hintergrund, Logo, Marke (Kopfzeile) und Handle (Fußzeile) sind frei wählbar.
+  Änderungen an einer Vorlage landen automatisch in einem eigenen Design; eigene Designs werden im
+  Browser gespeichert und lassen sich als JSON exportieren/importieren (Sicherung, Weitergabe).
+* Eigene Vorlagen für alle: in `kpmn_tracer/scorecard/themes.js` eintragen (Format im Dateikopf).
+* Direktlink auf ein Design/Format: `studio.html#theme=minimal&fmt=story`.
 
 ---
 
@@ -146,6 +170,12 @@ Bei Bällen, die vom Betrachter wegfliegen, ist der Ball im ersten Frame nach de
 oben und wird danach im Bild immer langsamer. Am besten **B** (Ball tracken) verwenden; von Hand mit
 dem Werkzeug **H** in 2–3 Frames direkt nach dem Impact auf den Ball klicken.
 
+**Die Analyse sucht den Ball an einer ganz falschen Stelle / Ergebnis aus einem anderen Clip**
+Bis Version 0.1.1 wurde die Ballposition des zuletzt gespeicherten Clips automatisch in jeden neuen
+Schlag (und in den Batch) übernommen – bei anderem Kamera-Standort lag der Startpunkt dann neben dem
+Ball. Ab 0.2.0 passiert das nur noch auf Wunsch. Bereits gespeicherte Projekte mit falschen Punkten:
+*Datei › Projekt zurücksetzen*, dann Ball neu markieren.
+
 **Impacts werden nicht erkannt**
 Der Ton ist die zuverlässigste Quelle. Ohne Ton (oder in Zeitlupe) muss der Ball vorher sichtbar
 ruhig an der markierten Stelle liegen. Sonst den Schlag von Hand anlegen (**N** am Schlagmoment).
@@ -168,7 +198,10 @@ kpmn-tracer.exe analyze clip.mov --ball 960 1500           # alle Schläge finde
 kpmn-tracer.exe export clip.mov --format prores            # Overlay aus clip.mov.kpmntrace.json
 kpmn-tracer.exe batch D:\Range\Session --auto-confirm 0.8 --export prores
 kpmn-tracer.exe batch-export D:\Range\Session
+kpmn-tracer.exe still clip.mov --frame 120 --out post.jpg  # Einzelbild mit Tracer
+kpmn-tracer.exe scorecard                                  # Scorecard Studio im Browser
 ```
+`batch` verwendet die Ballposition des letzten Clips nur mit `--last-position`.
 Aus dem Quellcode: `python -m kpmn_tracer …`.
 
 ## Dateien
@@ -178,7 +211,8 @@ Aus dem Quellcode: `python -m kpmn_tracer …`.
 | `<clip>.kpmntrace.json` | Projekt: Schläge, Punkte, Kamerapfad, Korrekturen, Style – nachbearbeitbar ohne Neuberechnung |
 | `.kpmn_cache\` (neben dem Clip) | Vorschau-Proxy, Personen-Masken, Audio – kann jederzeit gelöscht werden |
 | `kpmn_review\` | Thumbnails des Batch-Reviews |
-| `%USERPROFILE%\.kpmn_tracer\` | Style-Presets, Positions-Preset, Einstellungen, Log |
+| `%USERPROFILE%\.kpmn_tracer\` | Style-Presets, Ballposition des letzten Clips, Einstellungen, Log |
+| Browser-Speicher (Scorecard Studio) | Eingetragene Runde und eigene Designs (Export als JSON zur Sicherung) |
 
 ## Optionale ML-Ballerkennung
 Nur nötig, wenn die klassische Erkennung bei eigenen Clips nicht reicht (DECISIONS.md, D26):

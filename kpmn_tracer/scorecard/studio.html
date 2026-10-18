@@ -1,0 +1,1352 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scorecard Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Oswald:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&family=Archivo+Narrow:wght@500;600;700&family=Archivo:wght@400;500;600&display=swap">
+<style>
+/* Layout: Editor links, Live-Vorschau rechts (sticky); auf dem Handy Vorschau oben, Editor darunter.
+   Die Oberfläche ist immer dunkel; Akzentfarbe und Schriften kommen aus dem gewählten Design (themes.js). */
+:root {
+  --night: #0B1528;
+  --navy: #13233F;
+  --fairway: #1B3A66;
+  --lime: #C6F432;
+  --white: #FFFFFF;
+  --mist: #9FB0CC;
+  --mist-2: #6F82A3;
+  --line: rgba(255,255,255,0.12);
+  --field: #0F1D35;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--night); color: var(--white); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap {
+  max-width: 1320px; margin: 0 auto;
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 24px;
+}
+.top { display: flex; align-items: center; gap: 14px; }
+.top img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.top img[hidden] { display: none; }
+.top h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: 0.01em; text-transform: uppercase; line-height: 1; }
+.top p { margin: 4px 0 0; color: var(--mist); font-size: 14px; }
+.top .dot { color: var(--lime); }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.preview { order: -1; }
+@media (min-width: 980px) {
+  .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); }
+  .preview { order: 0; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); }
+}
+.panel { background: var(--navy); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.editor { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.panel h2 { margin: 0; font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: 0.06em; text-transform: uppercase; }
+.hint { margin: 0; color: var(--mist); font-size: 13px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.fields .wide { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field[hidden] { display: none; }
+label, .label { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); }
+input, select {
+  width: 100%; min-width: 0; font: inherit; color: var(--white);
+  background: var(--field); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; min-height: 44px;
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+
+.modes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.modes label, .formats label { letter-spacing: 0; text-transform: none; cursor: pointer; }
+.modes input, .formats input { position: absolute; opacity: 0; width: 1px; height: 1px; min-height: 0; }
+.modes span, .formats span {
+  display: flex; flex-direction: column; gap: 2px; padding: 10px; min-height: 56px; height: 100%;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--field);
+  color: var(--white); font-size: 14px; font-weight: 600;
+}
+.modes small, .formats small { color: var(--mist); font-weight: 500; font-size: 12px; line-height: 1.3; }
+.modes input:checked + span, .formats input:checked + span { border-color: var(--lime); box-shadow: inset 0 0 0 1px var(--lime); }
+.modes input:checked + span small, .formats input:checked + span small { color: var(--lime); }
+.modes input:focus-visible + span, .formats input:focus-visible + span { outline: 2px solid var(--lime); outline-offset: 2px; }
+@media (max-width: 620px) { .modes, .formats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.toggle { display: flex; align-items: center; gap: 12px; cursor: pointer; letter-spacing: 0; text-transform: none; font-size: 15px; color: var(--white); font-weight: 600; }
+.toggle input { width: 22px; height: 22px; min-height: 0; accent-color: var(--lime); margin: 0; }
+
+.btn { font: inherit; font-weight: 600; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--white); cursor: pointer; }
+.btn:hover { border-color: var(--mist); }
+.btn.danger { color: #FFB4A2; }
+.btn.primary { background: var(--lime); color: var(--night-ink, var(--night)); border-color: var(--lime); font-family: var(--display); font-size: 18px; letter-spacing: 0.04em; text-transform: uppercase; padding: 0 22px; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.holes-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+table.holes { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.holes th { text-align: left; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist); padding: 0 4px 8px; white-space: nowrap; }
+.holes td { padding: 3px 4px; }
+.holes td.no { font-family: var(--display); font-weight: 700; font-size: 20px; width: 40px; }
+.holes tr.sum td { border-top: 1px solid var(--line); padding-top: 10px; padding-bottom: 8px; font-family: var(--display); font-weight: 600; font-size: 18px; color: var(--mist); }
+.holes tr.sum + tr td { padding-top: 12px; }
+.holes input, .holes select { padding: 8px 6px; min-height: 42px; text-align: center; }
+.holes .res { font-family: var(--display); font-weight: 700; font-size: 19px; text-align: center; width: 64px; color: var(--mist-2); white-space: nowrap; }
+.holes .res.good { color: var(--lime); }
+.holes .res.bad { color: var(--white); }
+.holes [hidden] { display: none; }
+table.holes .c-hcp, table.holes .c-opp { display: none; }
+table.holes[data-mode="stableford"] .c-hcp { display: table-cell; }
+table.holes[data-mode="match"] .c-opp { display: table-cell; }
+table.holes[data-mode="match"] .c-len { display: none; }
+
+.stage { display: flex; justify-content: center; align-items: center; padding: 16px; border-radius: 12px; background: var(--night); border: 1px solid var(--line); min-height: 200px; }
+.stage.checker {
+  background-color: #2A3448;
+  background-image: linear-gradient(45deg, #343F55 25%, transparent 25%), linear-gradient(-45deg, #343F55 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #343F55 75%), linear-gradient(-45deg, transparent 75%, #343F55 75%);
+  background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+}
+#out { display: block; max-width: 100%; max-height: 72vh; width: auto; height: auto; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,0.45); }
+.stage.checker #out { box-shadow: none; }
+.export { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.status { color: var(--mist); font-size: 13px; margin: 0; min-height: 1.4em; flex: 1 1 240px; }
+.status.ok { color: var(--lime); }
+.loch-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.loch-row[hidden] { display: none; }
+.loch-row select { width: auto; min-width: 120px; }
+.sample-note { font-size: 13px; color: var(--night-ink, var(--night)); background: var(--lime); border-radius: 999px; padding: 3px 10px; font-weight: 600; }
+.sample-note[hidden] { display: none; }
+.swatches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.swatch { display: flex; align-items: center; gap: 8px; letter-spacing: 0; text-transform: none; font-size: 13px; font-weight: 500; color: var(--white); cursor: pointer; }
+.swatch input { width: 44px; height: 36px; padding: 2px; min-height: 0; flex: none; cursor: pointer; }
+.fields .hint.wide { grid-column: 1 / -1; }
+@media (max-width: 620px) { .swatches { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) {
+  .fields { grid-template-columns: minmax(0, 1fr); }
+  .holes td.no { width: 30px; font-size: 18px; }
+  .holes .res { width: 50px; font-size: 17px; }
+}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="top">
+    <img id="brand-logo" alt="Logo" width="52" height="52" hidden>
+    <div>
+      <h1>Scorecard<span class="dot">.</span>Studio</h1>
+      <p>Runde oder Turnier eintragen, Design und Format wählen, als PNG speichern.</p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="editor">
+      <div class="panel" id="design-panel">
+        <div class="panel-head">
+          <h2>Design</h2>
+          <div class="btn-row">
+            <button class="btn" id="btn-theme-export" type="button">Exportieren</button>
+            <button class="btn" id="btn-theme-import" type="button">Importieren</button>
+            <input type="file" id="theme-file" accept=".json,application/json" hidden>
+          </div>
+        </div>
+        <div class="fields">
+          <div class="field wide">
+            <label for="theme">Vorlage oder eigenes Design</label>
+            <select id="theme"></select>
+          </div>
+          <p class="hint wide" id="theme-hint">Änderungen an einer Vorlage werden automatisch als eigenes Design gespeichert, die Vorlage bleibt unverändert.</p>
+          <div class="field">
+            <label for="t-name">Name</label>
+            <input id="t-name" type="text" maxlength="40" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="t-fonts">Schrift</label>
+            <select id="t-fonts"></select>
+          </div>
+          <div class="field">
+            <label for="t-brand">Marke (Kopfzeile)</label>
+            <input id="t-brand" type="text" maxlength="28" placeholder="z. B. GC Musterplatz" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="t-handle">Handle (Fußzeile)</label>
+            <input id="t-handle" type="text" maxlength="32" placeholder="z. B. @deinkanal" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="t-background">Hintergrund</label>
+            <select id="t-background">
+              <option value="fairway">Fairway mit Tracer</option>
+              <option value="stripes">Mähstreifen</option>
+              <option value="plain">Schlicht</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="label">Logo</span>
+            <div class="btn-row">
+              <button class="btn" id="btn-logo" type="button">Bild wählen …</button>
+              <button class="btn" id="btn-logo-clear" type="button">Entfernen</button>
+              <select id="t-logoShape" aria-label="Form des Logos" style="width:auto">
+                <option value="circle">rund</option>
+                <option value="square">eckig</option>
+              </select>
+            </div>
+            <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+          </div>
+          <div class="field wide">
+            <span class="label">Farben</span>
+            <div class="swatches">
+              <label class="swatch"><input type="color" id="c-bgTop"> Hintergrund oben</label>
+              <label class="swatch"><input type="color" id="c-bgBottom"> Hintergrund unten</label>
+              <label class="swatch"><input type="color" id="c-header"> Tabellenkopf</label>
+              <label class="swatch"><input type="color" id="c-accent"> Akzent</label>
+              <label class="swatch"><input type="color" id="c-text"> Text</label>
+              <label class="swatch"><input type="color" id="c-muted"> Text gedämpft</label>
+            </div>
+          </div>
+          <div class="field wide">
+            <div class="btn-row">
+              <button class="btn danger" id="btn-theme-delete" type="button">Design löschen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Runde</h2>
+          <span class="sample-note" id="sample-note" hidden>Beispielrunde: einfach überschreiben</span>
+        </div>
+        <div class="fields">
+          <div class="field wide">
+            <label for="course">Golfplatz</label>
+            <input id="course" type="text" maxlength="48" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="date">Datum</label>
+            <input id="date" type="date">
+          </div>
+          <div class="field">
+            <label for="tee">Abschlag</label>
+            <select id="tee"><option>Gelb</option><option>Weiß</option><option>Blau</option><option>Rot</option><option>Schwarz</option><option>Orange</option></select>
+          </div>
+          <div class="field">
+            <label for="title">Überschrift</label>
+            <input id="title" type="text" maxlength="32" placeholder="Scorecard">
+          </div>
+          <div class="field">
+            <label for="holes">Anzahl Löcher</label>
+            <select id="holes"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Spielmodus</h2></div>
+        <div class="modes" role="radiogroup" aria-label="Spielmodus">
+          <label><input type="radio" name="mode" id="mode-stroke" value="stroke"><span>Zählspiel<small>Schläge zu Par</small></span></label>
+          <label><input type="radio" name="mode" id="mode-stableford" value="stableford"><span>Stableford<small>Punkte mit Vorgabe</small></span></label>
+          <label><input type="radio" name="mode" id="mode-scramble" value="scramble"><span>Scramble<small>Teamscore</small></span></label>
+          <label><input type="radio" name="mode" id="mode-match" value="match"><span>Lochspiel<small>Loch für Loch</small></span></label>
+        </div>
+        <div class="fields">
+          <div class="field" id="f-vorgabe" hidden>
+            <label for="vorgabe">Spielvorgabe</label>
+            <input id="vorgabe" type="number" inputmode="numeric" min="0" max="54">
+          </div>
+          <div class="field" id="f-hint-stableford" hidden>
+            <span class="label">So wird gerechnet</span>
+            <p class="hint">Die Vorgabeschläge werden nach der HCP-Reihenfolge der Löcher verteilt. Punkte = Par + Vorgabeschläge + 2 − Score.</p>
+          </div>
+          <div class="field" id="f-team" hidden>
+            <label for="team">Teamname</label>
+            <input id="team" type="text" maxlength="28">
+          </div>
+          <div class="field" id="f-players" hidden>
+            <label for="players">Mitspieler</label>
+            <input id="players" type="text" maxlength="60" placeholder="z. B. Felix, Max, Tom">
+          </div>
+          <div class="field" id="f-opp" hidden>
+            <label for="opp">Gegner</label>
+            <input id="opp" type="text" maxlength="20">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Turnier</h2></div>
+        <label class="toggle" for="tour-on"><input type="checkbox" id="tour-on"> Diese Runde ist ein Turnier</label>
+        <div class="fields" id="tour-fields" hidden>
+          <div class="field wide">
+            <label for="tour-name">Turniername</label>
+            <input id="tour-name" type="text" maxlength="32" placeholder="z. B. Anfängerturnier">
+          </div>
+          <div class="field">
+            <label for="tour-place">Platzierung</label>
+            <input id="tour-place" type="number" inputmode="numeric" min="1" max="999" placeholder="z. B. 3">
+          </div>
+          <div class="field">
+            <label for="tour-field">Teilnehmer</label>
+            <input id="tour-field" type="number" inputmode="numeric" min="1" max="999" placeholder="z. B. 24">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Löcher</h2>
+          <div class="btn-row">
+            <button class="btn" id="btn-sample" type="button">Beispiel laden</button>
+            <button class="btn danger" id="btn-clear" type="button">Scores leeren</button>
+          </div>
+        </div>
+        <p class="hint" id="holes-hint">Leere Scores zählen nicht mit. So kannst du auch eine laufende Runde zeigen.</p>
+        <div class="holes-scroll">
+          <table class="holes" id="holes-table" data-mode="stroke">
+            <thead><tr>
+              <th>Loch</th><th>Par</th><th class="c-len">Meter</th><th class="c-hcp">HCP</th>
+              <th id="th-score">Score</th><th class="c-opp" id="th-opp">Gegner</th><th id="th-res" style="text-align:center">+/−</th>
+            </tr></thead>
+            <tbody id="hole-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="preview">
+      <div class="panel">
+        <div class="panel-head"><h2>Format</h2></div>
+        <div class="formats" role="radiogroup" aria-label="Ausgabeformat">
+          <label><input type="radio" name="fmt" id="fmt-post" value="post"><span>Beitrag<small>4:5 · 1080×1350</small></span></label>
+          <label><input type="radio" name="fmt" id="fmt-story" value="story"><span>Story / Reel<small>9:16 · 1080×1920</small></span></label>
+          <label><input type="radio" name="fmt" id="fmt-overlay" value="overlay"><span>Einblendung Runde<small>transparent</small></span></label>
+          <label><input type="radio" name="fmt" id="fmt-hole" value="hole"><span>Einblendung Loch<small>transparent</small></span></label>
+        </div>
+        <div class="loch-row" id="loch-wrap" hidden>
+          <label for="loch">Loch für die Einblendung</label>
+          <select id="loch"></select>
+        </div>
+        <div class="stage" id="stage">
+          <canvas id="out" width="1080" height="1350" aria-label="Vorschau der Scorecard" role="img"></canvas>
+        </div>
+        <div class="export">
+          <p class="status" id="status" aria-live="polite"></p>
+          <button class="btn primary" id="btn-save" type="button">Als PNG speichern</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="themes.js"></script>
+<script>
+(() => {
+  const KEY = 'kpmn-scorecard-v1';
+  const OLD_KEY = 'teeoff-scorecard-v1';  // Daten der ursprünglichen teeoff.kpmn-Version übernehmen
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- Daten ----------
+  const SAMPLE_HOLES = [
+    [4,352,5,7,5],[4,318,6,11,5],[3,147,4,15,3],[5,462,6,3,6],[4,371,5,1,6],[4,334,5,9,4],[3,128,3,17,4],[4,305,5,13,5],[5,448,7,5,6],
+    [4,361,5,8,5],[3,155,4,16,4],[4,327,6,12,5],[5,471,6,2,6],[4,342,4,10,5],[4,389,5,4,5],[3,136,2,18,3],[5,455,6,6,6],[4,310,6,14,5]
+  ];
+  const SAMPLE = {
+    course: 'GC Musterplatz', date: '2026-10-17', tee: 'Gelb', title: 'Scorecard', holes: 18, themeId: 'nightrange',
+    mode: 'stroke', vorgabe: 28, team: 'Team Fairway', players: '', opp: 'Max',
+    tour: { on: false, name: '', place: '', field: '' },
+    data: SAMPLE_HOLES.map(([par, len, score, hcp, opp]) => ({ par, len, score, hcp, opp })),
+    sample: true
+  };
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const MODES = ['stroke', 'stableford', 'scramble', 'match'];
+
+  function normalize(s) {
+    const d = clone(SAMPLE);
+    const out = Object.assign({}, d, s || {});
+    out.tour = Object.assign({}, d.tour, (s && s.tour) || {});
+    if (!MODES.includes(out.mode)) out.mode = 'stroke';
+    out.holes = Math.min(18, Math.max(1, parseInt(out.holes, 10) || 9));
+    const data = Array.isArray(out.data) ? out.data : [];
+    out.data = Array.from({ length: 18 }, (_, i) => Object.assign({ par: 4, len: '', score: '', hcp: i + 1, opp: '' }, data[i] || {}));
+    return out;
+  }
+  function load() {
+    try { const raw = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY); return raw ? normalize(JSON.parse(raw)) : null; } catch (e) { return null; }
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ohne Speicher weiter */ } }
+
+  let state = load() || normalize(SAMPLE);
+  let fmt = 'post';
+  let lochSel = null;
+
+  const num = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : null; };
+  const fmtDiff = (d) => d === 0 ? '±0' : (d > 0 ? '+' + d : '−' + Math.abs(d));
+  const fmtM = (n) => n.toLocaleString('de-DE');
+  const fmtDec = (n) => n.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const fmtDate = (iso) => { if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return ''; const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
+  const statusText = (lead) => lead === 0 ? 'AS' : (lead > 0 ? `${lead} auf` : `${-lead} ab`);
+  const oppName = () => (state.opp || '').trim() || 'Gegner';
+
+  // ---------- Auswertung ----------
+  function stats() {
+    const n = state.holes, mode = state.mode;
+    const st = {
+      n, mode, played: 0, score: 0, parPlayed: 0, parTotal: 0, len: 0, diff: 0,
+      cnt: { birdie: 0, par: 0, bogey: 0, double: 0 },
+      points: 0, pc: { p3: 0, p2: 0, p1: 0, p0: 0 },
+      won: 0, halved: 0, lost: 0, lead: 0, matchPlayed: 0, decided: null,
+      holes: [], lastPlayed: 0
+    };
+    // Vorgabeschläge nach HCP-Reihenfolge verteilen
+    const V = Math.max(0, parseInt(state.vorgabe, 10) || 0);
+    const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => ((num(state.data[a].hcp) || 99) - (num(state.data[b].hcp) || 99)) || a - b);
+    const rank = []; order.forEach((idx, r) => { rank[idx] = r + 1; });
+    for (let i = 0; i < n; i++) {
+      const h = state.data[i];
+      const par = num(h.par) || 4, len = num(h.len) || 0, sc = num(h.score), op = num(h.opp);
+      const strokes = Math.floor(V / n) + (rank[i] <= V % n ? 1 : 0);
+      const o = { par, len, sc, op, hcp: num(h.hcp), strokes, d: null, pts: null, res: null, lead: null };
+      st.parTotal += par; st.len += len;
+      if (sc) {
+        o.d = sc - par;
+        st.played++; st.score += sc; st.parPlayed += par; st.lastPlayed = i + 1;
+        if (o.d <= -1) st.cnt.birdie++; else if (o.d === 0) st.cnt.par++; else if (o.d === 1) st.cnt.bogey++; else st.cnt.double++;
+        o.pts = Math.max(0, par + strokes + 2 - sc);
+        st.points += o.pts;
+        if (o.pts >= 3) st.pc.p3++; else if (o.pts === 2) st.pc.p2++; else if (o.pts === 1) st.pc.p1++; else st.pc.p0++;
+      }
+      if (sc && op && !st.decided) {
+        o.res = sc < op ? 1 : (sc > op ? -1 : 0);
+        if (o.res === 1) st.won++; else if (o.res === -1) st.lost++; else st.halved++;
+        st.lead += o.res; st.matchPlayed++;
+        o.lead = st.lead;
+        const remaining = n - (i + 1);
+        if (Math.abs(st.lead) > remaining) st.decided = { lead: st.lead, remaining, at: i };
+      }
+      st.holes.push(o);
+    }
+    st.diff = st.score - st.parPlayed;
+    // Lochspiel-Ergebnis
+    const allDone = st.decided || st.matchPlayed === n;
+    if (st.matchPlayed === 0) { st.matchShort = '–'; st.matchWord = 'Offen'; }
+    else if (st.decided && st.decided.remaining > 0) {
+      st.matchShort = `${Math.abs(st.decided.lead)}&${st.decided.remaining}`;
+      st.matchWord = st.decided.lead > 0 ? 'Gewonnen' : 'Verloren';
+    } else if (allDone) {
+      st.matchShort = statusText(st.lead);
+      st.matchWord = st.lead > 0 ? 'Gewonnen' : (st.lead < 0 ? 'Verloren' : 'Geteilt');
+    } else { st.matchShort = statusText(st.lead); st.matchWord = 'Läuft'; }
+    return st;
+  }
+
+  function rangeSum(st, a, b) {
+    const r = { par: 0, len: 0, score: 0, parPlayed: 0, played: 0, pts: 0, lastLead: null, opp: 0 };
+    for (let i = a; i < b; i++) {
+      const o = st.holes[i];
+      r.par += o.par; r.len += o.len;
+      if (o.sc) { r.score += o.sc; r.parPlayed += o.par; r.played++; r.pts += o.pts; }
+      if (o.op) r.opp += o.op;
+      if (o.lead !== null) r.lastLead = o.lead;
+    }
+    return r;
+  }
+
+  // ---------- Editor ----------
+  function buildRows() {
+    $('holes').innerHTML = Array.from({ length: 18 }, (_, i) => `<option value="${i + 1}">${i + 1} ${i ? 'Löcher' : 'Loch'}</option>`).join('');
+    let html = '';
+    for (let i = 0; i < 18; i++) {
+      const no = i + 1;
+      html += `<tr id="row-${no}">
+        <td class="no">${no}</td>
+        <td><select id="par-${no}" aria-label="Par Loch ${no}">${[3,4,5,6].map(p => `<option value="${p}">${p}</option>`).join('')}</select></td>
+        <td class="c-len"><input id="len-${no}" type="number" inputmode="numeric" min="0" max="999" aria-label="Meter Loch ${no}"></td>
+        <td class="c-hcp"><input id="hcp-${no}" type="number" inputmode="numeric" min="1" max="18" aria-label="HCP-Index Loch ${no}"></td>
+        <td><input id="score-${no}" type="number" inputmode="numeric" min="1" max="19" aria-label="Score Loch ${no}"></td>
+        <td class="c-opp"><input id="opp-${no}" type="number" inputmode="numeric" min="1" max="19" aria-label="Score Gegner Loch ${no}"></td>
+        <td class="res" id="res-${no}">–</td>
+      </tr>`;
+      if (i === 8) html += sumRow('a');
+    }
+    html += sumRow('b');
+    $('hole-rows').innerHTML = html;
+  }
+  function sumRow(k) {
+    return `<tr class="sum" id="sum-${k}"><td id="sum-${k}-label"></td><td id="sum-${k}-par"></td><td class="c-len" id="sum-${k}-len"></td><td class="c-hcp"></td><td id="sum-${k}-score"></td><td class="c-opp" id="sum-${k}-opp"></td><td class="res" id="sum-${k}-res"></td></tr>`;
+  }
+
+  function fillForm() {
+    $('course').value = state.course || '';
+    $('date').value = state.date || '';
+    $('tee').value = state.tee || 'Gelb';
+    $('title').value = state.title || '';
+    $('holes').value = String(state.holes);
+    $('mode-' + state.mode).checked = true;
+    $('vorgabe').value = state.vorgabe ?? '';
+    $('team').value = state.team || '';
+    $('players').value = state.players || '';
+    $('opp').value = state.opp || '';
+    $('tour-on').checked = !!state.tour.on;
+    $('tour-name').value = state.tour.name || '';
+    $('tour-place').value = state.tour.place || '';
+    $('tour-field').value = state.tour.field || '';
+    for (let i = 0; i < 18; i++) {
+      const h = state.data[i], no = i + 1;
+      $('par-' + no).value = String(num(h.par) || 4);
+      $('len-' + no).value = h.len || '';
+      $('hcp-' + no).value = h.hcp || '';
+      $('score-' + no).value = h.score || '';
+      $('opp-' + no).value = h.opp || '';
+    }
+    $('fmt-' + fmt).checked = true;
+    refreshEditor();
+  }
+
+  function setRes(el, txt, cls) { el.textContent = txt; el.classList.remove('good', 'bad'); if (cls) el.classList.add(cls); }
+
+  function refreshEditor() {
+    const n = state.holes, mode = state.mode, st = stats();
+    $('holes-table').dataset.mode = mode;
+    $('f-vorgabe').hidden = mode !== 'stableford';
+    $('f-hint-stableford').hidden = mode !== 'stableford';
+    $('f-team').hidden = mode !== 'scramble';
+    $('f-players').hidden = mode !== 'scramble';
+    $('f-opp').hidden = mode !== 'match';
+    $('tour-fields').hidden = !state.tour.on;
+    $('th-score').textContent = mode === 'match' ? 'Ich' : (mode === 'scramble' ? 'Team' : 'Score');
+    $('th-opp').textContent = oppName();
+    $('th-res').textContent = mode === 'stableford' ? 'Pkt' : (mode === 'match' ? 'Stand' : '+/−');
+    $('holes-hint').textContent = mode === 'match'
+      ? 'Trag deinen Score und den deines Gegners ein. Ist das Match entschieden, werden weitere Löcher nicht mehr gewertet.'
+      : (mode === 'stableford' ? 'HCP ist der Index des Lochs von der Scorekarte (1 = schwerstes Loch). Leere Scores zählen nicht mit.'
+      : 'Leere Scores zählen nicht mit. So kannst du auch eine laufende Runde zeigen.');
+
+    for (let i = 0; i < 18; i++) {
+      const no = i + 1, row = $('row-' + no);
+      row.hidden = i >= n;
+      if (i >= n) continue;
+      const o = st.holes[i], el = $('res-' + no);
+      if (mode === 'stableford') {
+        if (o.sc) setRes(el, o.pts + (o.strokes ? ` (+${o.strokes})` : ''), o.pts >= 3 ? 'good' : (o.pts >= 2 ? 'bad' : ''));
+        else setRes(el, o.strokes ? `(+${o.strokes})` : '–', '');
+      } else if (mode === 'match') {
+        if (o.lead !== null) setRes(el, statusText(o.lead), o.lead > 0 ? 'good' : (o.lead === 0 ? 'bad' : ''));
+        else setRes(el, (st.decided && i > st.decided.at) ? 'entsch.' : '–', '');
+      } else {
+        if (o.sc) setRes(el, fmtDiff(o.d), o.d < 0 ? 'good' : (o.d > 0 ? 'bad' : ''));
+        else setRes(el, '–', '');
+      }
+    }
+    // Summenzeilen
+    const two = n > 9;
+    $('sum-a').hidden = !two;
+    const ranges = two ? [['a', 0, 9, 'OUT'], ['b', 9, n, 'IN']] : [['b', 0, n, 'GES.']];
+    ranges.forEach(([k, a, b, label]) => {
+      const r = rangeSum(st, a, b);
+      $(`sum-${k}-label`).textContent = label;
+      $(`sum-${k}-par`).textContent = r.par;
+      $(`sum-${k}-len`).textContent = r.len ? fmtM(r.len) : '–';
+      $(`sum-${k}-score`).textContent = r.played ? r.score : '–';
+      $(`sum-${k}-opp`).textContent = r.opp || '–';
+      const el = $(`sum-${k}-res`);
+      if (mode === 'stableford') setRes(el, r.played ? `${r.pts} Pkt` : '–', r.played ? 'bad' : '');
+      else if (mode === 'match') setRes(el, r.lastLead !== null ? statusText(r.lastLead) : '–', r.lastLead > 0 ? 'good' : '');
+      else { const d = r.score - r.parPlayed; setRes(el, r.played ? fmtDiff(d) : '–', r.played ? (d < 0 ? 'good' : 'bad') : ''); }
+    });
+    $('sample-note').hidden = !state.sample;
+    const sel = $('loch');
+    const want = lochSel && lochSel <= n ? lochSel : (st.lastPlayed || 1);
+    sel.innerHTML = Array.from({ length: n }, (_, i) => `<option value="${i + 1}">Loch ${i + 1}</option>`).join('');
+    sel.value = String(want);
+    lochSel = want;
+    $('loch-wrap').hidden = fmt !== 'hole';
+  }
+
+  function onInput(e) {
+    const t = e.target;
+    if (!t.id && !t.name) return;
+    const m = t.id.match(/^(par|len|score|hcp|opp)-(\d+)$/);
+    let touchesData = true;
+    if (m) {
+      const i = +m[2] - 1;
+      state.data[i][m[1]] = t.value === '' ? '' : (m[1] === 'par' ? +t.value : (parseInt(t.value, 10) > 0 ? parseInt(t.value, 10) : ''));
+    } else if (['course', 'date', 'tee', 'title', 'team', 'players', 'opp'].includes(t.id)) {
+      state[t.id] = t.value;
+    } else if (t.id === 'vorgabe') {
+      state.vorgabe = t.value === '' ? '' : Math.max(0, parseInt(t.value, 10) || 0);
+    } else if (t.id === 'holes') {
+      state.holes = +t.value;
+    } else if (t.name === 'mode') {
+      state.mode = t.value;
+    } else if (t.id === 'tour-on') {
+      state.tour.on = t.checked;
+    } else if (t.id === 'tour-name') { state.tour.name = t.value; }
+    else if (t.id === 'tour-place') { state.tour.place = t.value; }
+    else if (t.id === 'tour-field') { state.tour.field = t.value; }
+    else if (t.name === 'fmt') { fmt = t.value; setStatus(''); touchesData = false; }
+    else if (t.id === 'loch') { lochSel = +t.value; touchesData = false; }
+    else return;
+    if (touchesData) { state.sample = false; save(); }
+    refreshEditor();
+    schedule();
+  }
+  document.addEventListener('input', onInput);
+  document.addEventListener('change', (e) => { const t = e.target; if (t.type === 'radio' || t.type === 'checkbox' || t.tagName === 'SELECT') onInput(e); });
+
+  $('btn-sample').addEventListener('click', () => {
+    const keepMode = state.mode;
+    const keepTheme = state.themeId; state = normalize(SAMPLE); state.mode = keepMode; state.themeId = keepTheme; save(); fillForm(); schedule(); setStatus('Beispielrunde geladen.');
+  });
+  let clearArmed = null;
+  $('btn-clear').addEventListener('click', (e) => {
+    const b = e.currentTarget;
+    if (!clearArmed) {
+      b.textContent = 'Wirklich leeren?';
+      clearArmed = setTimeout(() => { b.textContent = 'Scores leeren'; clearArmed = null; }, 3500);
+      return;
+    }
+    clearTimeout(clearArmed); clearArmed = null; b.textContent = 'Scores leeren';
+    state.data.forEach(h => { h.score = ''; h.opp = ''; }); state.sample = false; save(); fillForm(); schedule();
+    setStatus('Scores geleert. Par, Meter und HCP bleiben stehen.');
+  });
+
+  // ---------- Zeichnen ----------
+  const cv = $('out');
+  const ctx = cv.getContext('2d');
+  const F = (w, s, fam) => `${w} ${Math.round(s)}px ${fam === 'b' ? FONT.body : FONT.display}`;
+  function spacing(px) { if ('letterSpacing' in ctx) ctx.letterSpacing = px + 'px'; }
+  function text(str, x, y, f, c, align = 'left', base = 'alphabetic', ls = 0) {
+    ctx.font = f; ctx.fillStyle = c; ctx.textAlign = align; ctx.textBaseline = base; spacing(ls);
+    ctx.fillText(str, x, y); spacing(0);
+  }
+  function measure(str, f, ls = 0) { ctx.font = f; spacing(ls); const w = ctx.measureText(str).width; spacing(0); return w; }
+  function rr(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function fitFont(str, weight, size, maxW, fam, ls = 0) {
+    let s = size;
+    while (s > 16) { if (measure(str, F(weight, s, fam), ls) <= maxW) break; s -= 2; }
+    return s;
+  }
+  function clip(str, f, maxW) {
+    if (measure(str, f) <= maxW) return str;
+    let s = str; while (s.length > 1 && measure(s + '…', f) > maxW) s = s.slice(0, -1);
+    return s + '…';
+  }
+  function mark(cx, cy, r, d, s) {
+    ctx.lineWidth = 2.6 * s;
+    if (d <= -1) {
+      ctx.strokeStyle = C.lime;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      if (d <= -2) { ctx.beginPath(); ctx.arc(cx, cy, r + 6 * s, 0, Math.PI * 2); ctx.stroke(); }
+    } else if (d >= 1) {
+      ctx.strokeStyle = tint(0.55);
+      ctx.strokeRect(cx - r, cy - r, r * 2, r * 2);
+      if (d >= 2) { const o = r + 6 * s; ctx.strokeRect(cx - o, cy - o, o * 2, o * 2); }
+    }
+  }
+  const diffColor = (d) => d < 0 ? C.lime : (d === 0 ? C.mist : C.white);
+  const ptsColor = (p) => p >= 3 ? C.lime : (p === 2 ? C.white : (p === 1 ? C.mist : C.mist2));
+  const leadColor = (l) => l > 0 ? C.lime : (l === 0 ? C.white : C.mist);
+
+  function rowDefs(mode) {
+    if (mode === 'stableford') return [['hole', 58, 'LOCH'], ['par', 44, 'PAR'], ['hcp', 44, 'HCP'], ['score', 88, 'SCORE'], ['pts', 46, 'PUNKTE']];
+    if (mode === 'match') return [['hole', 58, 'LOCH'], ['par', 44, 'PAR'], ['me', 76, 'ICH'], ['opp', 76, oppName().toUpperCase()], ['stat', 46, 'STAND']];
+    return [['hole', 58, 'LOCH'], ['len', 44, 'METER'], ['par', 44, 'PAR'], ['score', 88, mode === 'scramble' ? 'TEAM' : 'SCORE'], ['diff', 46, '+/−']];
+  }
+  const tableH = (s) => rowDefs(state.mode).reduce((a, r) => a + r[1], 0) * s;
+
+  // Tabellen für die Runde: bis 9 Löcher eine Tabelle, darüber OUT/IN
+  function tables(st, x, y, w, s, gap) {
+    const n = st.n;
+    const labelW = Math.round(w * 0.15);
+    if (n <= 9) {
+      const colW = (w - labelW) / (n + 1);
+      return drawTable(st, x, y, labelW, colW, 0, n, 'GES.', s);
+    }
+    const colW = (w - labelW) / 10;
+    let h = drawTable(st, x, y, labelW, colW, 0, 9, 'OUT', s);
+    h += gap;
+    h += drawTable(st, x, y + h, labelW, colW, 9, n - 9, 'IN', s);
+    return h;
+  }
+
+  function drawTable(st, x, y, labelW, colW, start, count, label, s) {
+    const defs = rowDefs(st.mode);
+    const rows = defs.map(r => r[1] * s);
+    const H = rows.reduce((a, b) => a + b, 0);
+    const w = labelW + colW * (count + 1);
+    const rad = 18 * s;
+    const centers = []; let acc = y;
+    rows.forEach(h => { centers.push(acc + h / 2); acc += h; });
+    ctx.save();
+    rr(x, y, w, H, rad); ctx.clip();
+    ctx.fillStyle = tint(0.045); ctx.fillRect(x, y, w, H);
+    ctx.fillStyle = C.fairway; ctx.fillRect(x, y, w, rows[0]);
+    let yy = y;
+    defs.forEach((d, r) => { if (['score', 'me', 'opp'].includes(d[0])) { ctx.fillStyle = tint(0.05); ctx.fillRect(x, yy, w, rows[r]); } yy += rows[r]; });
+    const tx = x + labelW + colW * count;
+    ctx.fillStyle = alpha(C.lime, 0.07); ctx.fillRect(tx, y, colW, H);
+    ctx.fillStyle = C.lime; ctx.fillRect(tx, y, colW, rows[0]);
+    ctx.fillStyle = tint(0.10);
+    yy = y; for (let r = 0; r < rows.length - 1; r++) { yy += rows[r]; ctx.fillRect(x, yy, w, Math.max(1, s)); }
+    ctx.restore();
+    rr(x + 0.5, y + 0.5, w - 1, H - 1, rad); ctx.strokeStyle = tint(0.14); ctx.lineWidth = 1.5 * s; ctx.stroke();
+
+    defs.forEach((d, r) => {
+      const f = F(600, 17 * s, 'b');
+      text(clip(d[2], f, labelW - 26 * s), x + 18 * s, centers[r], f, r === 0 ? C.headText : C.mist, 'left', 'middle', 1.5 * s);
+    });
+
+    const big = Math.min(1, colW / (84 * s)) ;
+    const sumR = rangeSum(st, start, start + count);
+    for (let c = 0; c <= count; c++) {
+      const cx = x + labelW + colW * c + colW / 2;
+      const isTot = c === count;
+      const o = isTot ? null : st.holes[start + c];
+      defs.forEach((d, r) => {
+        const cy = centers[r], k = d[0];
+        if (k === 'hole') {
+          if (isTot) text(label, cx, cy + 1 * s, F(700, 26 * s), C.night, 'center', 'middle', 1 * s);
+          else text(String(start + c + 1), cx, cy + 1 * s, F(700, 30 * s), C.headText, 'center', 'middle');
+        } else if (k === 'len') {
+          const v = isTot ? sumR.len : o.len;
+          text(v ? fmtM(v) : '–', cx, cy, F(isTot ? 600 : 500, (isTot ? 22 : 23) * s), C.mist, 'center', 'middle');
+        } else if (k === 'par') {
+          text(String(isTot ? sumR.par : o.par), cx, cy, F(isTot ? 700 : 600, 28 * s), C.white, 'center', 'middle');
+        } else if (k === 'hcp') {
+          if (!isTot) text(o.hcp ? String(o.hcp) : '–', cx, cy, F(500, 23 * s), C.mist, 'center', 'middle');
+        } else if (k === 'score') {
+          if (isTot) { text(sumR.played ? String(sumR.score) : '–', cx, cy + 2 * s, F(700, 44 * s), C.white, 'center', 'middle'); return; }
+          if (o.sc) {
+            mark(cx, cy, 25 * s * Math.min(1, big + 0.15), o.d, s);
+            text(String(o.sc), cx, cy + 2 * s, F(700, 42 * s), o.d < 0 ? C.lime : C.white, 'center', 'middle');
+          } else text('–', cx, cy, F(500, 36 * s), C.mist2, 'center', 'middle');
+          if (st.mode === 'stableford' && o.strokes > 0) {
+            const nDots = Math.min(o.strokes, 3), sp = 9 * s;
+            for (let k2 = 0; k2 < nDots; k2++) { ctx.fillStyle = C.lime; ctx.beginPath(); ctx.arc(cx - (nDots - 1) * sp / 2 + k2 * sp, cy - 36 * s, 3.2 * s, 0, Math.PI * 2); ctx.fill(); }
+          }
+        } else if (k === 'diff') {
+          if (isTot) { const dd = sumR.score - sumR.parPlayed; if (sumR.played) text(fmtDiff(dd), cx, cy, F(700, 26 * s), diffColor(dd), 'center', 'middle'); }
+          else if (o.sc) text(fmtDiff(o.d), cx, cy, F(600, 25 * s), diffColor(o.d), 'center', 'middle');
+        } else if (k === 'pts') {
+          if (isTot) { if (sumR.played) text(String(sumR.pts), cx, cy, F(700, 28 * s), C.lime, 'center', 'middle'); }
+          else if (o.sc) text(String(o.pts), cx, cy, F(700, 27 * s), ptsColor(o.pts), 'center', 'middle');
+        } else if (k === 'me' || k === 'opp') {
+          const v = isTot ? (k === 'me' ? sumR.score : sumR.opp) : (k === 'me' ? o.sc : o.op);
+          if (isTot) { text(v ? String(v) : '–', cx, cy + 2 * s, F(700, 38 * s), C.white, 'center', 'middle'); return; }
+          if (!v) { text('–', cx, cy, F(500, 32 * s), C.mist2, 'center', 'middle'); return; }
+          const won = o.res === (k === 'me' ? 1 : -1), lost = o.res === (k === 'me' ? -1 : 1);
+          if (won) { ctx.lineWidth = 2.6 * s; ctx.strokeStyle = k === 'me' ? C.lime : tint(0.8); ctx.beginPath(); ctx.arc(cx, cy, 24 * s, 0, Math.PI * 2); ctx.stroke(); }
+          const col = o.res === null ? C.mist : (won ? (k === 'me' ? C.lime : C.white) : (lost ? C.mist2 : C.white));
+          text(String(v), cx, cy + 2 * s, F(700, 38 * s), col, 'center', 'middle');
+        } else if (k === 'stat') {
+          const l = isTot ? sumR.lastLead : o.lead;
+          if (l !== null) text(statusText(l), cx, cy, F(600, Math.min(24, 20 + colW / 30) * s), leadColor(l), 'center', 'middle');
+        }
+      });
+    }
+    return H;
+  }
+
+  function background(W, H) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, C.bg); g.addColorStop(1, C.navy);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (T.background === 'stripes') {
+      ctx.save(); ctx.fillStyle = tint(0.035);
+      const sw = W / 7, sk = H * 0.3;
+      for (let i = -2; i < 10; i += 2) {
+        ctx.beginPath(); ctx.moveTo(i * sw + sk, 0); ctx.lineTo((i + 1) * sw + sk, 0); ctx.lineTo((i + 1) * sw, H); ctx.lineTo(i * sw, H); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+    if (T.background !== 'fairway') return;
+    ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = C.fairway;
+    ctx.beginPath(); ctx.moveTo(W * 0.47, H * 0.18); ctx.lineTo(W * 0.53, H * 0.18); ctx.lineTo(W * 1.05, H); ctx.lineTo(W * -0.05, H); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha = 0.18; ctx.strokeStyle = C.lime; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(W * 0.92, H * 1.02); ctx.bezierCurveTo(W * 1.02, H * 0.55, W * 0.95, H * 0.12, W * 0.74, H * 0.06); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Was oben groß steht, je nach Modus
+  function hero(st) {
+    if (st.mode === 'stableford') {
+      return { big: st.played ? String(st.points) : '–', pill: st.played ? 'Punkte' : null, pillFill: C.lime,
+        sub: st.played < st.n ? `nach ${st.played} von ${st.n}` : `Brutto ${st.score}` };
+    }
+    if (st.mode === 'match') {
+      const w = st.matchWord;
+      return { big: st.matchShort, pill: st.matchPlayed ? w : null,
+        pillFill: w === 'Gewonnen' ? C.lime : (w === 'Läuft' ? null : C.white), sub: `gegen ${oppName()}` };
+    }
+    return { big: st.played ? String(st.score) : '–', pill: st.played ? fmtDiff(st.diff) : null, pillFill: C.lime,
+      sub: st.played < st.n ? `nach ${st.played} von ${st.n}` : (st.diff > 0 ? 'über Par' : (st.diff < 0 ? 'unter Par' : 'Even Par')) };
+  }
+
+  function drawHero(st, right, top, s, bigSize) {
+    const h = hero(st);
+    const bf = F(700, bigSize * s);
+    text(h.big, right, top + bigSize * 0.82 * s, bf, C.white, 'right', 'alphabetic');
+    let width = measure(h.big, bf);
+    const py = top + (bigSize * 0.94) * s, ph = 50 * s;
+    let pillLeft = right;
+    if (h.pill) {
+      const pf = F(700, 36 * s);
+      const pw = measure(h.pill, pf) + 34 * s;
+      pillLeft = right - pw;
+      rr(pillLeft, py, pw, ph, ph / 2);
+      if (h.pillFill) { ctx.fillStyle = h.pillFill; ctx.fill(); }
+      else { ctx.strokeStyle = C.lime; ctx.lineWidth = 2.5 * s; ctx.stroke(); }
+      text(h.pill, pillLeft + pw / 2, py + ph / 2 + 2 * s, pf, h.pillFill ? C.night : C.lime, 'center', 'middle');
+    }
+    if (h.sub) {
+      const sf = F(500, 22 * s, 'b');
+      const sx = h.pill ? pillLeft - 14 * s : right;
+      text(h.sub, sx, py + ph / 2 + 1 * s, sf, C.mist, 'right', 'middle');
+      width = Math.max(width, right - sx + measure(h.sub, sf));
+    } else width = Math.max(width, right - pillLeft);
+    return width;
+  }
+
+  function labelText() {
+    const t = (state.tour.on && state.tour.name.trim()) ? state.tour.name.trim() : (state.title || 'Scorecard');
+    const b = (T.brand || '').trim();
+    return (b ? b.toUpperCase() + '  ·  ' : '') + t.toUpperCase();
+  }
+  function modeLine(st) {
+    const m = state.mode;
+    if (m === 'stableford') return `Stableford · Vorgabe ${parseInt(state.vorgabe, 10) || 0}`;
+    if (m === 'scramble') return state.team ? `Scramble · ${state.team}` : 'Scramble';
+    if (m === 'match') return `Lochspiel gegen ${oppName()}`;
+    return state.tee ? `Abschlag ${state.tee}` : '';
+  }
+  function placeText() {
+    const p = parseInt(state.tour.place, 10), f = parseInt(state.tour.field, 10);
+    if (!state.tour.on || !p) return '';
+    return f ? `PLATZ ${p} VON ${f}` : `PLATZ ${p}`;
+  }
+
+  function header(W, y, st, s = 1) {
+    const L = 104 * s, x0 = 60;
+    const hasLogo = drawLogo(x0, y, L);
+    const heroRight = W - 60;
+    const heroW = drawHero(st, heroRight, y, s, 136);
+    const tx = hasLogo ? x0 + L + 26 * s : x0;
+    const maxW = heroRight - heroW - tx - 30 * s;
+    const lab = labelText();
+    const lf = fitFont(lab, 600, 20 * s, maxW, 'b', 2.5 * s);
+    text(lab, tx, y + 26 * s, F(600, lf, 'b'), C.lime, 'left', 'alphabetic', 2.5 * s);
+    const name = (state.course || 'Golfplatz').toUpperCase();
+    const fs = fitFont(name, 700, 66 * s, maxW, null, 0.5 * s);
+    const nameY = y + 38 * s + fs * 0.82;
+    text(name, tx, nameY, F(700, fs), C.white, 'left', 'alphabetic', 0.5 * s);
+    const meta = [fmtDate(state.date), modeLine(st), `Par ${st.parTotal}`, st.len && state.mode !== 'match' ? `${fmtM(st.len)} m` : ''].filter(Boolean).join('  ·  ');
+    const ms = fitFont(meta, 500, 24 * s, maxW, 'b');
+    text(meta, tx, nameY + 40 * s, F(500, ms, 'b'), C.mist, 'left', 'alphabetic');
+    const pt = placeText();
+    if (pt) {
+      const pf = F(700, 22 * s);
+      const pw = measure(pt, pf, 1.5 * s) + 28 * s, ph = 36 * s, py = nameY + 58 * s;
+      rr(tx, py, pw, ph, ph / 2); ctx.strokeStyle = C.lime; ctx.lineWidth = 2 * s; ctx.stroke();
+      text(pt, tx + pw / 2, py + ph / 2 + 1 * s, pf, C.lime, 'center', 'middle', 1.5 * s);
+    }
+  }
+
+  function tileDefs(st) {
+    if (st.mode === 'stableford') return [
+      { label: '3+ PKT', color: C.lime, v: st.pc.p3 }, { label: '2 PKT', color: C.white, v: st.pc.p2 },
+      { label: '1 PKT', color: C.mist, v: st.pc.p1 }, { label: '0 PKT', color: C.slate, v: st.pc.p0 }];
+    if (st.mode === 'match') return [
+      { label: 'GEWONNEN', color: C.lime, v: st.won }, { label: 'GETEILT', color: C.white, v: st.halved },
+      { label: 'VERLOREN', color: C.slate, v: st.lost }, { label: 'SCHLÄGE', color: C.mist, v: st.score, noBar: true }];
+    return [
+      { label: 'BIRDIE+', color: C.lime, v: st.cnt.birdie }, { label: 'PAR', color: C.white, v: st.cnt.par },
+      { label: 'BOGEY', color: C.mist, v: st.cnt.bogey }, { label: 'DOPPEL+', color: C.slate, v: st.cnt.double }];
+  }
+  function summaryRight(st) {
+    const parts = [];
+    const pt = placeText(); if (pt) parts.push(pt.charAt(0) + pt.slice(1).toLowerCase().replace('von', 'von'));
+    if (st.mode === 'stableford') parts.push(st.played ? `${st.points} Punkte · Brutto ${st.score}` : 'Noch keine Scores');
+    else if (st.mode === 'match') parts.push(st.matchPlayed ? `${st.matchWord === 'Läuft' ? 'Stand' : st.matchWord} ${st.matchShort} gegen ${oppName()}` : 'Noch keine Löcher gespielt');
+    else {
+      if (st.n > 9) { const a = rangeSum(st, 0, 9), b = rangeSum(st, 9, st.n); if (a.played) parts.push(`OUT ${a.score}`); if (b.played) parts.push(`IN ${b.score}`); }
+      parts.push(st.played ? `${st.score} Schläge auf Par ${st.parPlayed}` : 'Noch keine Scores');
+    }
+    return parts.join('  ·  ');
+  }
+  function summaryLine(st) {
+    if (!st.played) return '';
+    if (st.mode === 'stableford') return `Ø ${fmtDec(st.points / st.played)} Punkte pro Loch   ·   Spielvorgabe ${parseInt(state.vorgabe, 10) || 0}`;
+    if (st.mode === 'match') return st.matchPlayed ? `${st.matchPlayed} von ${st.n} Löchern gespielt   ·   Ø ${fmtDec(st.score / st.played)} Schläge pro Loch` : '';
+    const pct = Math.round(100 * (st.cnt.birdie + st.cnt.par) / st.played);
+    const base = `Par oder besser: ${pct} %   ·   Ø ${fmtDec(st.score / st.played)} Schläge pro Loch`;
+    if (st.mode === 'scramble' && state.players.trim()) return `Team: ${state.players.trim()}   ·   Ø ${fmtDec(st.score / st.played)} pro Loch`;
+    return base;
+  }
+
+  function summary(x, y, w, st, opt) {
+    const s = opt.s || 1;
+    let yy = y;
+    const lab = 'ZUSAMMENFASSUNG';
+    text(lab, x, yy + 20 * s, F(600, 20 * s, 'b'), C.lime, 'left', 'alphabetic', 2.5 * s);
+    const labW = measure(lab, F(600, 20 * s, 'b'), 2.5 * s);
+    const right = summaryRight(st);
+    const rs = fitFont(right, 600, 24 * s, w - labW - 30 * s, null, 0.5 * s);
+    text(right, x + w, yy + 20 * s, F(600, rs), C.white, 'right', 'alphabetic', 0.5 * s);
+    yy += 40 * s;
+    const tiles = tileDefs(st);
+    const gap = 16 * s, tw = (w - gap * 3) / 4, th = (opt.tileH || 128) * s;
+    tiles.forEach((t, i) => {
+      const tx = x + i * (tw + gap);
+      rr(tx, yy, tw, th, 14 * s); ctx.fillStyle = tint(0.05); ctx.fill();
+      ctx.strokeStyle = tint(0.10); ctx.lineWidth = 1.5 * s; ctx.stroke();
+      ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(tx + 24 * s, yy + 30 * s, 7 * s, 0, Math.PI * 2); ctx.fill();
+      text(t.label, tx + 40 * s, yy + 30 * s, F(600, 17 * s, 'b'), C.mist, 'left', 'middle', 1.5 * s);
+      text(String(t.v), tx + 22 * s, yy + th - 22 * s, F(700, (opt.tileNum || 64) * s), i === 0 && t.v ? C.lime : C.white, 'left', 'alphabetic');
+    });
+    yy += th;
+    const barTiles = tiles.filter(t => !t.noBar);
+    const total = barTiles.reduce((a, t) => a + t.v, 0);
+    if (opt.bar && total) {
+      yy += 28 * s;
+      const bh = 22 * s;
+      rr(x, yy, w, bh, bh / 2); ctx.save(); ctx.clip();
+      ctx.fillStyle = tint(0.06); ctx.fillRect(x, yy, w, bh);
+      let bx = x;
+      barTiles.forEach(t => { const bw = w * t.v / total; if (bw > 0) { ctx.fillStyle = t.color; ctx.fillRect(bx, yy, bw, bh); bx += bw; } });
+      ctx.restore();
+      yy += bh + 30 * s;
+      const line = summaryLine(st);
+      if (line) text(clip(line, F(500, 24 * s, 'b'), w), x, yy, F(500, 24 * s, 'b'), C.mist, 'left', 'alphabetic');
+      yy += 8 * s;
+    }
+    return yy - y;
+  }
+
+  function legend(x, y, s) {
+    let items = [['Eagle', -2], ['Birdie', -1], ['Bogey', 1], ['Doppel+', 2]];
+    let lx = x;
+    if (state.mode === 'match') {
+      ctx.lineWidth = 2 * s; ctx.strokeStyle = C.lime; ctx.beginPath(); ctx.arc(lx + 12 * s, y, 10 * s, 0, Math.PI * 2); ctx.stroke();
+      text('Loch gewonnen', lx + 32 * s, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
+      lx += 32 * s + measure('Loch gewonnen', F(500, 20 * s, 'b')) + 30 * s;
+      text('AS = All Square', lx, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
+      return;
+    }
+    items.forEach(([l, d]) => {
+      mark(lx + 12 * s, y, 9 * s, d, s * 0.6);
+      text(l, lx + 32 * s, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
+      lx += 32 * s + measure(l, F(500, 20 * s, 'b')) + 30 * s;
+    });
+    if (state.mode === 'stableford') {
+      ctx.fillStyle = C.lime; ctx.beginPath(); ctx.arc(lx + 8 * s, y, 4 * s, 0, Math.PI * 2); ctx.fill();
+      text('Vorgabeschlag', lx + 22 * s, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
+    }
+  }
+  function footer(W, y, s) {
+    legend(60, y, s);
+    const hd = (T.handle || '').trim();
+    if (hd) text(hd, W - 60, y + 1 * s, F(700, 28 * s), C.white, 'right', 'middle', 1 * s);
+  }
+
+  function size(W, H) { if (cv.width !== W) cv.width = W; if (cv.height !== H) cv.height = H; }
+
+  function drawPost() {
+    const W = 1080, H = 1350, st = stats();
+    size(W, H); background(W, H);
+    header(W, 64, st);
+    const w = W - 120;
+    const big = st.n <= 9;
+    const s = big ? 1.12 : 1;
+    let y = big ? 320 : 300;
+    y += tables(st, 60, y, w, s, 26) + (big ? 60 : 40);
+    summary(60, y, w, st, { s: big ? 1.05 : 1, tileH: big ? 140 : 124, bar: true });
+    footer(W, 1290, 1);
+  }
+  function drawStory() {
+    const W = 1080, H = 1920, st = stats();
+    size(W, H); background(W, H);
+    header(W, 250, st);
+    const w = W - 120;
+    const big = st.n <= 9;
+    let y = 520;
+    y += tables(st, 60, y, w, big ? 1.15 : 1, 28) + (big ? 70 : 56);
+    summary(60, y, w, st, { s: big ? 1.1 : 1, tileH: big ? 160 : 150, tileNum: big ? 80 : 76, bar: true });
+    footer(W, 1690, 1);
+  }
+  function drawOverlay() {
+    const st = stats();
+    const W = 1080, pad = 36, w = W - 2 * pad - 48;
+    const headH = 128 + (placeText() ? 0 : 0);
+    const tH = tableH(1);
+    const H = pad + 24 + headH + tH + (st.n > 9 ? 24 + tH : 0) + 32 + 40 + 120 + 24 + pad;
+    size(W, H);
+    ctx.clearRect(0, 0, W, H);
+    rr(pad, pad, W - 2 * pad, H - 2 * pad, 28); ctx.fillStyle = alpha(C.bg, 0.9); ctx.fill();
+    ctx.strokeStyle = tint(0.14); ctx.lineWidth = 2; ctx.stroke();
+    const x = pad + 24;
+    let y = pad + 24;
+    const hasLogo = drawLogo(x, y, 84);
+    const right = x + w;
+    const heroW = drawHero(st, right, y - 4, 0.72, 120);
+    const tx = hasLogo ? x + 104 : x, maxW = right - heroW - tx - 24;
+    const lab = labelText();
+    text(lab, tx, y + 22, F(600, fitFont(lab, 600, 18, maxW, 'b', 2.5), 'b'), C.lime, 'left', 'alphabetic', 2.5);
+    const name = (state.course || 'Golfplatz').toUpperCase();
+    const fs = fitFont(name, 700, 50, maxW, null, 0.5);
+    text(name, tx, y + 34 + fs * 0.8, F(700, fs), C.white, 'left', 'alphabetic', 0.5);
+    const meta = [fmtDate(state.date), modeLine(st), placeText() ? placeText().charAt(0) + placeText().slice(1).toLowerCase() : ''].filter(Boolean).join('  ·  ');
+    text(meta, tx, y + 34 + fs * 0.8 + 32, F(500, fitFont(meta, 500, 21, maxW, 'b'), 'b'), C.mist, 'left', 'alphabetic');
+    y += headH;
+    y += tables(st, x, y, w, 1, 24) + 32;
+    summary(x, y, w, st, { s: 1, tileH: 120, tileNum: 58 });
+  }
+
+  function drawHole() {
+    const st = stats();
+    const i = Math.min(lochSel || 1, st.n) - 1;
+    const o = st.holes[i];
+    const W = 1080, H = 268, pad = 30;
+    size(W, H);
+    ctx.clearRect(0, 0, W, H);
+    const px = pad, py = pad, pw = W - 2 * pad, ph = H - 2 * pad;
+    ctx.save(); rr(px, py, pw, ph, 26); ctx.clip();
+    ctx.fillStyle = alpha(C.bg, 0.92); ctx.fillRect(px, py, pw, ph);
+    ctx.fillStyle = C.lime; ctx.fillRect(px, py, 200, ph);
+    ctx.restore();
+    rr(px + 1, py + 1, pw - 2, ph - 2, 26); ctx.strokeStyle = tint(0.14); ctx.lineWidth = 2; ctx.stroke();
+    text('LOCH', px + 100, py + 58, F(600, 22, 'b'), C.night, 'center', 'alphabetic', 4);
+    text(String(i + 1), px + 100, py + 170, F(700, 120), C.night, 'center', 'alphabetic');
+
+    const run = rangeSum(st, 0, i + 1);
+    let cols;
+    if (st.mode === 'stableford') {
+      cols = [
+        { label: 'PAR', val: String(o.par) },
+        { label: 'HCP', val: o.hcp ? String(o.hcp) : '–', sub: o.strokes ? `+${o.strokes} Schlag${o.strokes > 1 ? 'e' : ''}` : '' },
+        { label: 'SCORE', val: o.sc ? String(o.sc) : '–', score: true },
+        { label: 'PUNKTE', val: o.sc ? String(o.pts) : '–', color: o.sc ? ptsColor(o.pts) : C.white },
+        { label: 'GESAMT', val: run.played ? String(run.pts) : '–', color: C.lime, sub: run.played ? `Punkte nach ${run.played}` : '' }];
+    } else if (st.mode === 'match') {
+      const w = o.res === 1 ? 'Gewonnen' : (o.res === -1 ? 'Verloren' : (o.res === 0 ? 'Geteilt' : '–'));
+      cols = [
+        { label: 'PAR', val: String(o.par) },
+        { label: 'ICH', val: o.sc ? String(o.sc) : '–', color: o.res === 1 ? C.lime : (o.res === -1 ? C.mist : C.white) },
+        { label: oppName().toUpperCase(), val: o.op ? String(o.op) : '–', color: o.res === -1 ? C.white : (o.res === 1 ? C.mist : C.white) },
+        { label: 'LOCH', val: w, small: true, color: o.res === 1 ? C.lime : C.white },
+        { label: 'STAND', val: o.lead !== null ? statusText(o.lead) : '–', color: o.lead !== null ? leadColor(o.lead) : C.white, small: o.lead !== null }];
+    } else {
+      cols = [
+        { label: 'PAR', val: String(o.par) },
+        { label: 'METER', val: o.len ? String(o.len) : '–' },
+        { label: st.mode === 'scramble' ? 'TEAM' : 'SCORE', val: o.sc ? String(o.sc) : '–', score: true },
+        { label: 'LOCH', val: o.sc ? fmtDiff(o.d) : '–', color: o.sc ? diffColor(o.d) : C.white },
+        { label: 'GESAMT', val: run.played ? fmtDiff(run.score - run.parPlayed) : '–', color: run.played ? diffColor(run.score - run.parPlayed) : C.white, sub: run.played ? `${run.score} nach ${run.played}` : '' }];
+    }
+    const xs = [px + 290, px + 430, px + 600, px + 770, px + 920];
+    cols.forEach((c, k) => {
+      const cx = xs[k];
+      const lf = F(600, 18, 'b');
+      text(clip(c.label, lf, 140), cx, py + 58, lf, C.mist, 'center', 'alphabetic', 2.5);
+      if (c.score && o.sc) {
+        mark(cx, py + 134, 40, o.d, 1.4);
+        text(c.val, cx, py + 138, F(700, 68), o.d < 0 ? C.lime : C.white, 'center', 'middle');
+      } else {
+        const f = F(700, c.small ? fitFont(c.val, 700, 46, 150) : (c.score ? 68 : 58));
+        text(c.val, cx, py + 138, f, c.color || C.white, 'center', 'middle');
+      }
+      if (c.sub) text(c.sub, cx, py + 192, F(500, 18, 'b'), C.mist, 'center', 'alphabetic');
+    });
+    ctx.fillStyle = tint(0.10);
+    [px + 520, px + 690, px + 850].forEach(sx => ctx.fillRect(sx, py + 40, 2, ph - 80));
+  }
+
+  let raf = 0;
+  function schedule() { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); }
+  function render() {
+    $('stage').classList.toggle('checker', fmt === 'overlay' || fmt === 'hole');
+    if (fmt === 'post') drawPost();
+    else if (fmt === 'story') drawStory();
+    else if (fmt === 'overlay') drawOverlay();
+    else drawHole();
+    const h = hero(stats());
+    cv.setAttribute('aria-label', `Vorschau: ${state.course || 'Golfplatz'}, ${h.big}${h.pill ? ' ' + h.pill : ''}`);
+  }
+
+  // ---------- Export ----------
+  const dlPromise = (async () => {
+    try { if (!(window.claude && window.claude.use)) return null; return await Promise.race([window.claude.use('downloads'), new Promise(r => setTimeout(() => r(null), 1500))]); } catch (e) { return null; }
+  })();
+  function setStatus(msg, ok) { const el = $('status'); el.textContent = msg; el.classList.toggle('ok', !!ok); }
+  const slug = (s) => (s || 'runde').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'runde';
+  const FMT_NAME = { post: 'beitrag', story: 'story', overlay: 'einblendung-runde', hole: 'einblendung-loch' };
+  async function downloadBlob(blob, filename) {
+    const dl = await dlPromise;
+    if (!dl) {
+      // Eigenständige Datei im Browser: normaler Download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      setStatus('Gespeichert: ' + filename, true);
+      return;
+    }
+    try { await dl.save({ filename, data: blob }); setStatus('Gespeichert: ' + filename, true); }
+    catch (err) {
+      const code = err && err.code;
+      if (code === 'declined') setStatus('Speichern abgebrochen.');
+      else if (code === 'rate_limited') setStatus('Es ist schon ein Speichern-Dialog offen. Kurz warten und nochmal tippen.');
+      else setStatus('Speichern ist hier gerade nicht möglich. Rechtsklick bzw. lange auf die Vorschau drücken und „Bild speichern“ wählen.');
+    }
+  }
+  $('btn-save').addEventListener('click', async () => {
+    render();
+    setStatus('Bild wird vorbereitet …');
+    const extra = fmt === 'hole' ? `-loch${lochSel}` : '';
+    const base = state.tour.on && state.tour.name ? slug(state.tour.name) : slug(state.course);
+    const pre = (T.brand || '').trim() ? slug(T.brand) : 'scorecard';
+    const filename = `${pre}_${base}_${state.date || 'runde'}_${FMT_NAME[fmt]}${extra}.png`;
+    try {
+      cv.toBlob((blob) => {
+        if (!blob) { setStatus('Das Bild konnte nicht erzeugt werden. Bitte nochmal versuchen.'); return; }
+        downloadBlob(blob, filename);
+      }, 'image/png');
+    } catch (e) { setStatus('Das Bild konnte nicht erzeugt werden (Logo aus fremder Quelle?).'); }
+  });
+
+  // ---------- Designs ----------
+  // Schriftpaare (Anzeige/Text). Google Fonts werden im <head> geladen; offline greifen die Ersatzschriften.
+  const FONTS = {
+    barlow: { name: 'Barlow Condensed / Barlow', display: '"Barlow Condensed", "Arial Narrow", sans-serif', body: '"Barlow", "Segoe UI", sans-serif', load: ['Barlow Condensed', 'Barlow'] },
+    oswald: { name: 'Oswald / Source Sans 3', display: '"Oswald", "Arial Narrow", sans-serif', body: '"Source Sans 3", "Segoe UI", sans-serif', load: ['Oswald', 'Source Sans 3'] },
+    inter: { name: 'Inter Tight / Inter', display: '"Inter Tight", "Segoe UI", sans-serif', body: '"Inter", "Segoe UI", sans-serif', load: ['Inter Tight', 'Inter'] },
+    archivo: { name: 'Archivo Narrow / Archivo', display: '"Archivo Narrow", "Arial Narrow", sans-serif', body: '"Archivo", "Segoe UI", sans-serif', load: ['Archivo Narrow', 'Archivo'] },
+    system: { name: 'Systemschrift (offline)', display: '"Arial Narrow", "Segoe UI", sans-serif', body: '"Segoe UI", system-ui, sans-serif', load: [] }
+  };
+  window.SCORECARD_FONTS = FONTS;
+  const FALLBACK_THEME = {
+    id: 'standard', name: 'Standard', builtin: true, fonts: 'barlow', background: 'fairway', logoShape: 'circle', brand: '', handle: '', logo: null,
+    colors: { bgTop: '#0C1A31', bgBottom: '#13233F', header: '#1B3A66', accent: '#C6F432', text: '#FFFFFF', muted: '#9FB0CC' }
+  };
+  const BASE_COLORS = ['bgTop', 'bgBottom', 'header', 'accent', 'text', 'muted'];
+  const DERIVED = ['headerText', 'accentInk', 'muted2', 'slate'];
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const hexRgb = (h) => { const n = HEX.test(h || '') ? parseInt(h.slice(1), 16) : 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const rgbHex = (c) => '#' + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+  const mix = (a, b, t) => { const x = hexRgb(a), y = hexRgb(b); return rgbHex(x.map((v, i) => v + (y[i] - v) * t)); };
+  const lum = (h) => { const c = hexRgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const onColor = (bg, a, b) => contrast(bg, a) >= contrast(bg, b) ? a : b;
+  const alpha = (h, a) => { const [r, g, b] = hexRgb(h); return `rgba(${r},${g},${b},${a})`; };
+  const tint = (a) => alpha(C.ink, a);  // feine Flächen/Linien: hell auf dunklem, dunkel auf hellem Design
+
+  function resolveColors(t) {
+    const c = Object.assign({}, FALLBACK_THEME.colors, t.colors || {});
+    BASE_COLORS.forEach(k => { if (!HEX.test(c[k] || '')) c[k] = FALLBACK_THEME.colors[k]; });
+    if (!HEX.test(c.headerText || '')) c.headerText = onColor(c.header, '#FFFFFF', '#111111');
+    if (!HEX.test(c.accentInk || '')) c.accentInk = onColor(c.accent, c.bgTop, c.text);
+    if (!HEX.test(c.muted2 || '')) c.muted2 = mix(c.muted, c.bgBottom, 0.35);
+    if (!HEX.test(c.slate || '')) c.slate = mix(c.muted, c.bgBottom, 0.5);
+    c.ink = lum(c.bgTop) > 0.4 ? c.text : '#FFFFFF';
+    return c;
+  }
+
+  const THEME_KEY = 'kpmn-scorecard-themes-v1';
+  const BUILTIN = ((window.SCORECARD_THEMES && window.SCORECARD_THEMES.length) ? window.SCORECARD_THEMES : [FALLBACK_THEME])
+    .map(t => Object.assign({}, t, { builtin: true }));
+  let own = (() => { try { const a = JSON.parse(localStorage.getItem(THEME_KEY) || '[]'); return Array.isArray(a) ? a.filter(t => t && t.id && t.colors) : []; } catch (e) { return []; } })();
+  function saveOwn() {
+    try { localStorage.setItem(THEME_KEY, JSON.stringify(own)); return true; }
+    catch (e) { setStatus('Das Design ist zu groß für den Browser-Speicher (meist das Logo). Bitte ein kleineres Logo wählen.'); return false; }
+  }
+  const allThemes = () => BUILTIN.concat(own);
+  const themeById = (id) => allThemes().find(t => t.id === id) || BUILTIN[0];
+
+  let T = BUILTIN[0];
+  let C = resolveColors(T);
+  let FONT = FONTS.barlow;
+  let logo = null;
+
+  function applyTheme(t) {
+    T = t;
+    C = Object.assign(resolveColors(t), {});
+    // Namen wie im ursprünglichen NightRange-Code: night = Text auf Akzent, navy = Verlauf unten, fairway = Tabellenkopf
+    C.night = C.accentInk; C.navy = C.bgBottom; C.bg = C.bgTop; C.fairway = C.header; C.headText = C.headerText;
+    C.lime = C.accent; C.white = C.text; C.mist = C.muted; C.mist2 = C.muted2;
+    FONT = FONTS[t.fonts] || FONTS.barlow;
+    const root = document.documentElement.style;
+    root.setProperty('--lime', C.accent);
+    root.setProperty('--night-ink', C.accentInk);
+    root.setProperty('--display', FONT.display);
+    root.setProperty('--body', FONT.body);
+    logo = null;
+    const img = $('brand-logo');
+    if (t.logo) {
+      const im = new Image();
+      im.onload = () => { if (T === t) { logo = im; schedule(); } };
+      im.src = t.logo;
+      img.src = t.logo; img.hidden = false;
+      img.style.borderRadius = t.logoShape === 'square' ? '18%' : '50%';
+    } else { img.removeAttribute('src'); img.hidden = true; }
+    if (document.fonts && document.fonts.load) {
+      const specs = [];
+      FONT.load.forEach((f, i) => (i === 0 ? [500, 600, 700] : [400, 500, 600]).forEach(w => specs.push(`${w} 40px "${f}"`)));
+      Promise.all(specs.map(f => document.fonts.load(f).catch(() => null))).then(schedule, schedule);
+    }
+    fillDesign();
+    schedule();
+  }
+
+  function drawLogo(x, y, L) {
+    if (!(logo && logo.complete && logo.naturalWidth)) return false;
+    ctx.save();
+    if (T.logoShape === 'square') rr(x, y, L, L, L * 0.16);
+    else { ctx.beginPath(); ctx.arc(x + L / 2, y + L / 2, L / 2, 0, Math.PI * 2); }
+    ctx.clip();
+    const w = logo.naturalWidth, h = logo.naturalHeight, k = Math.min(w, h);  // quadratisch zuschneiden
+    ctx.drawImage(logo, (w - k) / 2, (h - k) / 2, k, k, x, y, L, L);
+    ctx.restore();
+    return true;
+  }
+
+  // --- Design-Editor ---
+  function fillThemeSelect() {
+    const sel = $('theme');
+    const opt = (t) => `<option value="${t.id}">${String(t.name || 'Ohne Namen').replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</option>`;
+    sel.innerHTML = `<optgroup label="Vorlagen">${BUILTIN.map(opt).join('')}</optgroup>` +
+      (own.length ? `<optgroup label="Eigene Designs">${own.map(opt).join('')}</optgroup>` : '');
+    sel.value = T.id;
+  }
+  function fillDesign() {
+    fillThemeSelect();
+    $('t-fonts').innerHTML = Object.entries(FONTS).map(([k, f]) => `<option value="${k}">${f.name}</option>`).join('');
+    $('t-name').value = T.name || '';
+    $('t-fonts').value = FONTS[T.fonts] ? T.fonts : 'barlow';
+    $('t-brand').value = T.brand || '';
+    $('t-handle').value = T.handle || '';
+    $('t-background').value = T.background || 'plain';
+    $('t-logoShape').value = T.logoShape === 'square' ? 'square' : 'circle';
+    BASE_COLORS.forEach(k => { $('c-' + k).value = C[k]; });
+    $('btn-theme-delete').hidden = !!T.builtin;
+    $('btn-logo-clear').disabled = !T.logo;
+    $('theme-hint').textContent = T.builtin
+      ? 'Vorlage: Änderungen werden automatisch als eigenes Design gespeichert, die Vorlage bleibt unverändert.'
+      : 'Eigenes Design: Änderungen werden sofort gespeichert. Mit „Exportieren“ als Datei sichern oder weitergeben.';
+  }
+  const newId = () => 'own-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  // Änderung am aktuellen Design; eine Vorlage wird dabei zuerst kopiert
+  function editTheme(mutate) {
+    let t = T;
+    if (t.builtin) {
+      t = clone(t); delete t.builtin;
+      t.id = newId(); t.name = `${T.name} (eigenes)`;
+      own.push(t);
+      state.themeId = t.id; save();
+    }
+    mutate(t);
+    saveOwn();
+    applyTheme(t);
+  }
+  $('theme').addEventListener('change', (e) => { state.themeId = e.target.value; save(); applyTheme(themeById(state.themeId)); setStatus(''); });
+  $('t-name').addEventListener('input', (e) => { const v = e.target.value; editTheme(t => { t.name = v; }); $('t-name').focus(); });
+  $('t-fonts').addEventListener('change', (e) => editTheme(t => { t.fonts = e.target.value; }));
+  $('t-brand').addEventListener('input', (e) => { const v = e.target.value; editTheme(t => { t.brand = v; }); $('t-brand').focus(); });
+  $('t-handle').addEventListener('input', (e) => { const v = e.target.value; editTheme(t => { t.handle = v; }); $('t-handle').focus(); });
+  $('t-background').addEventListener('change', (e) => editTheme(t => { t.background = e.target.value; }));
+  $('t-logoShape').addEventListener('change', (e) => editTheme(t => { t.logoShape = e.target.value; }));
+  BASE_COLORS.forEach(k => $('c-' + k).addEventListener('input', (e) => {
+    const v = e.target.value;
+    // abgeleitete Farben (Text auf Akzent usw.) neu berechnen
+    editTheme(t => { t.colors = Object.assign({}, t.colors, { [k]: v }); DERIVED.forEach(d => delete t.colors[d]); });
+  }));
+  $('btn-logo').addEventListener('click', () => $('logo-file').click());
+  $('btn-logo-clear').addEventListener('click', () => editTheme(t => { t.logo = null; }));
+  $('logo-file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      const im = new Image();
+      im.onload = () => {
+        // verkleinert und quadratisch gespeichert: hält den Browser-Speicher klein
+        const k = Math.min(im.naturalWidth || 512, im.naturalHeight || 512), N = Math.min(480, k);
+        const c = document.createElement('canvas'); c.width = c.height = N;
+        c.getContext('2d').drawImage(im, ((im.naturalWidth || k) - k) / 2, ((im.naturalHeight || k) - k) / 2, k, k, 0, 0, N, N);
+        const url = c.toDataURL('image/png');
+        editTheme(t => { t.logo = url; });
+        setStatus('Logo übernommen.', true);
+      };
+      im.onerror = () => setStatus('Das Bild konnte nicht gelesen werden.');
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(f);
+  });
+  let delArmed = null;
+  $('btn-theme-delete').addEventListener('click', (e) => {
+    if (T.builtin) return;
+    const b = e.currentTarget;
+    if (!delArmed) {
+      b.textContent = 'Wirklich löschen?';
+      delArmed = setTimeout(() => { b.textContent = 'Design löschen'; delArmed = null; }, 3500);
+      return;
+    }
+    clearTimeout(delArmed); delArmed = null; b.textContent = 'Design löschen';
+    own = own.filter(t => t.id !== T.id); saveOwn();
+    state.themeId = BUILTIN[0].id; save();
+    applyTheme(BUILTIN[0]);
+    setStatus('Design gelöscht.');
+  });
+  $('btn-theme-export').addEventListener('click', () => {
+    const t = clone(T); delete t.builtin;
+    t.format = 'kpmn-scorecard-design'; t.version = 1;
+    const blob = new Blob([JSON.stringify(t, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, `scorecard-design_${slug(t.name)}.json`);
+  });
+  $('btn-theme-import').addEventListener('click', () => $('theme-file').click());
+  $('theme-file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    f.text().then((txt) => {
+      const d = JSON.parse(txt);
+      if (!d || typeof d !== 'object' || !d.colors || !BASE_COLORS.every(k => HEX.test(d.colors[k] || ''))) throw new Error('format');
+      const t = {
+        id: newId(), name: String(d.name || 'Importiertes Design').slice(0, 40),
+        colors: Object.fromEntries(Object.entries(d.colors).filter(([k, v]) => BASE_COLORS.concat(DERIVED).includes(k) && HEX.test(v))),
+        fonts: FONTS[d.fonts] ? d.fonts : 'barlow',
+        background: ['fairway', 'stripes', 'plain'].includes(d.background) ? d.background : 'plain',
+        logoShape: d.logoShape === 'square' ? 'square' : 'circle',
+        brand: String(d.brand || '').slice(0, 28), handle: String(d.handle || '').slice(0, 32),
+        logo: typeof d.logo === 'string' && /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(d.logo) ? d.logo : null
+      };
+      own.push(t);
+      if (!saveOwn()) { own.pop(); return; }
+      state.themeId = t.id; save();
+      applyTheme(t);
+      setStatus(`Design „${t.name}“ importiert.`, true);
+    }).catch(() => setStatus('Diese Datei ist kein Scorecard-Design (JSON aus „Exportieren“).'));
+  });
+
+  // ---------- Start ----------
+  buildRows();
+  fillForm();
+  // Link-Parameter, z. B. studio.html#theme=minimal&fmt=story
+  const hp = new URLSearchParams(location.hash.slice(1));
+  if (hp.get('theme') && allThemes().some(t => t.id === hp.get('theme'))) state.themeId = hp.get('theme');
+  if (FMT_NAME[hp.get('fmt')]) { fmt = hp.get('fmt'); $('fmt-' + fmt).checked = true; refreshEditor(); }
+  applyTheme(themeById(state.themeId));
+  render();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+})();
+</script>
+
+</body>
+</html>

@@ -128,8 +128,12 @@ def analyze_clip(
     for i, c in enumerate(todo):
         shot = Shot(impact_frame=c.frame)
         pos = c.ball_pos or hint
-        if pos is not None:
-            shot.set_anchor(AnchorKind.START, *pos)
+        if pos is None:  # audio-only impact without a known ball: the user marks it in the editor
+            shot.confidence, shot.source, shot.label = 0.0, "auto", "Ball markieren"
+            new.append(shot)
+            p.shots.append(shot)
+            continue
+        shot.set_anchor(AnchorKind.START, *pos)
         a, b = 0.2 + 0.8 * i / len(todo), 0.2 + 0.8 * (i + 1) / len(todo)
         res = analyze_shot(session, shot, options, _sub(progress, a, b), cancel)
         shot.confidence = (res.confidence if res else 0.0) * c.confidence

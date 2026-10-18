@@ -13,6 +13,8 @@ VENDOR = ROOT / "vendor"
 datas = [
     (str(ROOT / "assets" / "kpmn_tracer.png"), "assets"),
     (str(ROOT / "README.md"), "."),
+    (str(ROOT / "kpmn_tracer" / "scorecard" / "studio.html"), "scorecard"),
+    (str(ROOT / "kpmn_tracer" / "scorecard" / "themes.js"), "scorecard"),
 ]
 datas += [(str(p), "models") for p in (VENDOR / "models").glob("*") if p.is_file()]
 mp_datas, mp_bins, mp_hidden = collect_all("mediapipe")
