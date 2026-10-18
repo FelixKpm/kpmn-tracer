@@ -154,13 +154,17 @@ daneben; gewünscht: Frame mit Tracer als Bild, Scorecard-Generator mit austausc
 - Tests: steiler Abflug mit den gemessenen Ballpositionen, Einzelbild (CFR/VFR/gedreht/Tracer),
   Projekt zurücksetzen, Scorecard-Designs.
 
+## Nachtrag 3 – Einführungstour (v0.2.1)
+- Geführte Tour beim ersten Start, jederzeit über *Hilfe › Einführungstour* (D40).
+- Test: jeder Schritt findet sein Ziel, Sprechblase im Fenster und nicht über dem Ziel, läuft nur einmal.
+
 ## Definition of Done – Abgleich
 | Kriterium | Stand |
 |---|---|
 | Stativ- und Handheld-Clip importieren, Ball automatisch getrackt oder mit wenigen Klicks korrigiert | ✅ synthetisch (≤ 0,5 px) und an einem echten CC0-Clip geprüft; iPhone-Clips des Nutzers noch nicht |
 | Overlay mit Alpha liegt frame-genau über dem Original | ✅ Frameanzahl/Auflösung/Rate identisch, per Skript zurückgelegt geprüft; VFR wie Resolve (1:1) |
 | Batch-Verarbeitung einer Range-Session | ✅ GUI + CLI, Review, Export bestätigter Schläge |
-| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 112 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
+| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 113 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
 
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.

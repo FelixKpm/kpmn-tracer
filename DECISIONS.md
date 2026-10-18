@@ -356,3 +356,13 @@ statische Seite hostbar.
   (Browser-Speicher), Export/Import als JSON.
 * Logos liegen als Data-URL im Design, weil Bilder von `file://` den Canvas für den PNG-Export
   sperren würden; hochgeladene Logos werden auf 480 px verkleinert.
+
+## D40 – Einführungstour als Overlay im Hauptfenster
+Wunsch: Die App ist ohne Erklärung schwer zu durchschauen. Statt eines separaten Assistenten
+(der vom echten Fenster ablenkt) dunkelt ein Overlay das Hauptfenster ab, hebt den jeweils
+erklärten Bereich hervor und zeigt daneben eine Sprechblase (13 Schritte: Ablauf, Vorschau,
+Zeitleiste, Transport, Schläge, Automatik, Werkzeuge, Kamera, Flugkurve, Aussehen, Text, Export,
+Menüs). Ziele werden zur Laufzeit als Widgets bestimmt; Bereiche im scrollbaren Seitenpanel
+werden vorher ins Bild gescrollt; die Sprechblase geht auf die Seite mit dem meisten Platz.
+Läuft automatisch einmal beim ersten Start (`settings.json` → `extra.tour_done`), danach über
+*Hilfe › Einführungstour*. Während der Tour sind Klicks ins Fenster gesperrt.

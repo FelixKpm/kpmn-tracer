@@ -48,6 +48,10 @@ def main(argv: list[str] | None = None) -> int:
         QTimer.singleShot(1500, app.quit)
     if len(argv) > 1 and Path(argv[1]).exists():
         win.open_path(Path(argv[1]))
+    elif not smoke:
+        from PySide6.QtCore import QTimer
+
+        QTimer.singleShot(500, win.maybe_start_tour)  # first start: guided tour
     return app.exec()
 
 
