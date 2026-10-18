@@ -303,3 +303,56 @@ Detektionen werden gegen die Kurve durch ihre zeitlichen Nachbarn geprüft (Star
 Nachbar, Toleranz wächst mit der lokalen Geschwindigkeit); die Nachsuche interpoliert zwischen den
 Nachbardetektionen. Das globale Modell dient nur noch der Landeschätzung. Ergebnis beim Nutzer-Clip:
 58 Detektionen von Frame 709 (1 Frame nach dem Impact) bis 768 statt nur des Abstiegs.
+
+## D36 – Ballposition eines früheren Clips nur noch auf Wunsch
+Gemeldet: „scheinbar werden alte Daten im neuen Video geladen“. Ursache: Beim Speichern wurde die
+Ballposition (plus grobe Kurvenform und Flugzeit) als Positions-Preset gemerkt und bei **N** in jeden
+neuen Schlag eines *anderen* Clips eingesetzt; der Batch nutzte sie ebenfalls ungefragt. Bei anderem
+Standort (z. B. IMG_2366, aus der Hand) lag der Startpunkt neben dem Ball, die Analyse suchte dort und
+lieferte Unsinn – oder verwarf den richtigen Ton-Impact („ball did not move“). Zudem lädt ein Clip
+immer sein gespeichertes Projekt (auch aus einem Batch-Lauf) ohne Hinweis.
+* **N** setzt nur noch die Ballposition *dieses* Clips; *Ballposition vom letzten Clip übernehmen*
+  (nur Startpunkt) ist eine explizite Aktion. Batch: Schalter, standardmäßig aus; CLI: `--last-position`.
+* Beim Öffnen eines Clips mit gespeichertem Projekt erscheint ein Hinweis; *Projekt zurücksetzen*
+  verwirft Schläge, Ballposition und Impact-Kandidaten (Style bleibt, rückgängig machbar).
+* Batch: *Bereits analysierte Clips neu berechnen* in der Oberfläche (vorher nur CLI).
+* `analyze_clip` legt Ton-Impacts ohne bekannte Ballposition als „Ball markieren“ an, statt mit einem
+  Fehler abzubrechen.
+
+## D37 – Steiler, kameranaher Abflug (IMG_2366)
+Wedge aus der Hand gefilmt, Ball steigt fast senkrecht: ~430 Proxy-px im ersten Frame, ~70 px im
+fünften. Die Startprüfung verlangte 2,5 px Übereinstimmung mit einer 3-Punkt-Hochrechnung und das
+Suchfenster endete 0,45 Bilddiagonalen über dem Ball → nur der langsame Schlägerkopf wurde gefunden
+(3 Detektionen, Konfidenz 0).
+* Zuordnungstoleranz wächst mit der Bildgeschwindigkeit des Modells (2,5 px + 4 %); ein
+  Sub-Frame-Fehler des Impact-Zeitpunkts (Schallverzögerung, Rolling Shutter) verschiebt den Ball
+  direkt nach dem Abflug um Dutzende Pixel.
+* Hypothesen werden auf ihrer ganzen Unterstützung neu angepasst und erneut zugeordnet, bis sie
+  stabil sind – so erreicht eine Hypothese aus drei Frames auch die stark abgebremsten späteren.
+* Suchfenster: alles oberhalb des Startpunkts.
+* Glattheit einer Hypothese relativ zur lokalen Geschwindigkeit (sonst gewinnt der langsame,
+  „glatte“ Schlägerkopf gegen den schnellen Ball).
+Ergebnis: 55 Detektionen von Frame 13 bis 108 (Abflug, Apex in den Wolken, Abstieg vor den Bäumen),
+Konfidenz 0,76; IMG_2335 (0,98) und der CC0-Referenzclip (0,91) unverändert.
+
+## D38 – Einzelbild-Export aus dem Original
+Für Bild-Beiträge wird der Frame aus dem **Original** dekodiert (volle Auflösung, Rotation, HDR→SDR
+wie der eingebrannte Export), nicht aus dem 1080p-Proxy. Frame *i* der Timeline → Zeitstempel des
+*i*-ten Quell-Frames (VFR-Modus „frames“) bzw. des zur Zeit *i/fps* gezeigten Frames („resample“);
+FFmpeg sucht genau (`-ss` vor `-i` mit Dekodierung) eine Viertel-Frame-Dauer vor diesem Zeitpunkt.
+Getestet mit Index-Videos (CFR, VFR mit verschobenen Zeitstempeln, gedreht). ~4 s pro 4K-Frame.
+
+## D39 – Scorecard Studio als eigenständige HTML-Seite mit Designs als Daten
+Der vom Nutzer mitgebrachte Generator (Canvas-Rendering, eine Datei) bleibt eine HTML-Seite und
+wird von der App im Standard-Browser geöffnet (*Extras*, CLI `scorecard`), statt ihn nach Qt zu
+portieren oder QtWebEngine (+~150 MB) einzubinden: getrennt vom Tracer, ohne App nutzbar, als
+statische Seite hostbar.
+* Alles Markenspezifische wurde aus dem Code in **Designs** verschoben (`themes.js`): Farben (6
+  Grundfarben, Rest abgeleitet über Kontrast/Mischung), Schriftpaar, Hintergrund (Fairway+Tracer,
+  Mähstreifen, schlicht), Logo (Data-URL, rund/eckig), Marke und Handle. Halbtransparente Flächen
+  werden aus der Textfarbe abgeleitet, damit helle Designs funktionieren.
+* *NightRange · teeoff.kpmn* ist exakt das ursprüngliche Design inkl. Logo und bleibt Vorlage; vier
+  neutrale Vorlagen ohne Marke. Änderungen an einer Vorlage erzeugen automatisch ein eigenes Design
+  (Browser-Speicher), Export/Import als JSON.
+* Logos liegen als Data-URL im Design, weil Bilder von `file://` den Canvas für den PNG-Export
+  sperren würden; hochgeladene Logos werden auf 480 px verkleinert.

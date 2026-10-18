@@ -143,13 +143,24 @@ Gemeldet: manueller Tracer hängt bis zum Apex hinter dem Ball her, auch mit Sta
 - Regressionstests: Zeit-Pins, zwei Schläge 0,42 s nacheinander, naher schneller Abflug,
   Template-Frame ≠ 0.
 
+## Nachtrag 2 – Nutzer-Feedback nach vielen Test-Clips (v0.2.0)
+Gemeldet: „alte Daten im neuen Video“, Automatik bei IMG_2366 (Wedge, aus der Hand) völlig
+daneben; gewünscht: Frame mit Tracer als Bild, Scorecard-Generator mit austauschbaren Designs.
+- Ursache „alte Daten“: Ballposition des letzten Clips wurde ungefragt übernommen (D36) → nur noch
+  auf Wunsch; Projekt zurücksetzen; Hinweis beim Laden; Batch-Schalter.
+- Ball-Tracker für steile, nahe Abflüge (D37): IMG_2366 jetzt 55 Detektionen, Konfidenz 0,76.
+- Einzelbild-Export in Originalauflösung mit Tracer (D38): GUI, CLI `still`.
+- Scorecard Studio mit Design-System, NightRange als Vorlage (D39): *Extras*, CLI `scorecard`.
+- Tests: steiler Abflug mit den gemessenen Ballpositionen, Einzelbild (CFR/VFR/gedreht/Tracer),
+  Projekt zurücksetzen, Scorecard-Designs.
+
 ## Definition of Done – Abgleich
 | Kriterium | Stand |
 |---|---|
 | Stativ- und Handheld-Clip importieren, Ball automatisch getrackt oder mit wenigen Klicks korrigiert | ✅ synthetisch (≤ 0,5 px) und an einem echten CC0-Clip geprüft; iPhone-Clips des Nutzers noch nicht |
 | Overlay mit Alpha liegt frame-genau über dem Original | ✅ Frameanzahl/Auflösung/Rate identisch, per Skript zurückgelegt geprüft; VFR wie Resolve (1:1) |
 | Batch-Verarbeitung einer Range-Session | ✅ GUI + CLI, Review, Export bestätigter Schläge |
-| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 102 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
+| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 112 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
 
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.
