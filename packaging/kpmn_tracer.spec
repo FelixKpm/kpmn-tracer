@@ -31,7 +31,8 @@ if not IS_WIN:
 # as PyInstaller binaries its DLLs would be analysed and duplicated into the top folder.
 mp_datas, mp_bins, mp_hidden = collect_all("mediapipe")
 
-EXCLUDES = ["torch", "torchvision", "ultralytics", "imageio_ffmpeg", "tensorflow", "tkinter", "IPython", "jupyter",
+EXCLUDES = ["jax", "jaxlib", "torch", "torchvision",  # jax: pulled in by MediaPipe 0.10.21 (Intel Macs), unused
+             "ultralytics", "imageio_ffmpeg", "tensorflow", "tkinter", "IPython", "jupyter",
             "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.Qt3DCore",
             "PySide6.QtQuick", "PySide6.QtQml", "PySide6.QtMultimedia", "PySide6.QtCharts",
             "PySide6.QtDataVisualization", "PySide6.QtPdf", "PySide6.QtBluetooth"]

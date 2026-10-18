@@ -366,3 +366,26 @@ Menüs). Ziele werden zur Laufzeit als Widgets bestimmt; Bereiche im scrollbaren
 werden vorher ins Bild gescrollt; die Sprechblase geht auf die Seite mit dem meisten Platz.
 Läuft automatisch einmal beim ersten Start (`settings.json` → `extra.tour_done`), danach über
 *Hilfe › Einführungstour*. Während der Tour sind Klicks ins Fenster gesperrt.
+
+## D41 – macOS und Linux
+Wunsch vor der Veröffentlichung: neben Windows auch Mac (wichtigstes Ziel) und Linux.
+Der Code war bis auf Kleinigkeiten plattformneutral (Python/Qt/OpenCV/MediaPipe/FFmpeg); die Arbeit
+lag in Build, Abhängigkeiten und Laufzeit-Details. Da nur ein Windows-Rechner vorhanden ist, laufen
+Tests und Builds für alle Systeme auf echten Maschinen in **GitHub Actions** (`build.yml`):
+Windows x64, macOS arm64 (macos-14), macOS x64 (macos-15-intel), Linux x64 (Ubuntu 22.04 – ältere
+glibc, damit der Build auch auf älteren Distributionen läuft). Jeder Build führt die komplette
+Testsuite, den Selbsttest des fertigen Pakets und einen GUI-Starttest aus.
+* **FFmpeg:** macOS/Linux nutzen statische Release-Builds (FFmpeg 9.0.2, Martin Riedl, per URL
+  gepinnt, SHA-256 geprüft); Windows unverändert BtbN. Der Selbsttest prüft jetzt die benötigten
+  Funktionen (prores_ks, libx264/265, zscale, tonemap).
+* **Pakete:** macOS als `.app` im `.dmg` (CLI unter `Contents/MacOS/kpmn-tracer`, Videos per Finder
+  „Öffnen mit“), Linux als `tar.gz` mit `install.sh` (Menüeintrag + `kpmn-tracer` im PATH, ohne root).
+* **Nicht signiert/notarisiert:** Apple-Notarisierung und Windows-Codesignatur kosten Geld; die
+  Anleitungen erklären den einmaligen „Trotzdem öffnen“-Schritt. Nachrüstbar, ohne den Build zu ändern.
+* **Intel-Macs:** MediaPipe veröffentlicht für x86_64-macOS nur noch Versionen ≤ 0.10.21 (mit
+  numpy 1.x, OpenCV < 4.12); Abhängigkeiten per Umgebungsmarker getrennt, alle Tests grün. Das
+  mitgezogene JAX wird nicht gebündelt.
+* **Linux:** MediaPipe braucht die System-Bibliothek `libGLESv2` (Paket `libgles2`). Fehlt sie,
+  meldet die App das klar und arbeitet ohne Personen-Maske weiter (vorher: Fehlerdialog, Abbruch).
+* **Kleinigkeiten:** Tastenkürzel-Texte mit ⌘ auf dem Mac, Einstellungen/Beenden im App-Menü,
+  Standardschrift je System, Tests blockieren nie an modalen Dialogen, Test-Timeouts in CI.

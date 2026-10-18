@@ -158,6 +158,11 @@ daneben; gewünscht: Frame mit Tracer als Bild, Scorecard-Generator mit austausc
 - Geführte Tour beim ersten Start, jederzeit über *Hilfe › Einführungstour* (D40).
 - Test: jeder Schritt findet sein Ziel, Sprechblase im Fenster und nicht über dem Ziel, läuft nur einmal.
 
+## Nachtrag 4 – macOS und Linux (v0.3.0)
+- Builds für Windows x64, macOS Apple Silicon, macOS Intel und Linux x64 aus GitHub Actions; auf
+  jedem System laufen alle Tests, der Selbsttest des Pakets und ein GUI-Starttest (D41).
+- Installationsanleitung für alle drei Systeme im README.
+
 ## Definition of Done – Abgleich
 | Kriterium | Stand |
 |---|---|
