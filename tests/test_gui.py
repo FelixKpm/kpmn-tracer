@@ -270,7 +270,7 @@ def test_presets_text_confirm_and_batch_window(app: QApplication, range_session_
     # confirm toggles
     w.toggle_confirm()
     assert w.current_shot().confirmed
-    # saving remembers the tripod position; a new shot in another clip starts there
+    # saving remembers the tripod position; it is used in another clip only on request (D36)
     assert w.save()
     pre = PresetStore().load_position()
     assert pre is not None and abs(pre.start[0] * 640 - ball[0]) < 1
@@ -278,7 +278,9 @@ def test_presets_text_confirm_and_batch_window(app: QApplication, range_session_
     w.goto(truth["impact_frames"][1])
     w.add_shot()
     s2 = w.current_shot()
-    assert s2.anchor(AnchorKind.START) is not None and s2.anchor(AnchorKind.LAND) is not None
+    assert s2.anchor(AnchorKind.START) is None and s2.anchor(AnchorKind.LAND) is None
+    w.apply_last_position()
+    assert abs(s2.anchor(AnchorKind.START).x - ball[0]) < 1 and s2.anchor(AnchorKind.LAND) is None
     # batch window shows the review list of a folder
     w.open_batch()
     bw = w.batch_window
@@ -292,3 +294,32 @@ def test_presets_text_confirm_and_batch_window(app: QApplication, range_session_
     bw.close()
     w.close()
     Path(sess.project.source + ".kpmntrace.json").unlink(missing_ok=True)
+
+
+def test_still_image_and_project_reset(window, app: QApplication, tmp_path: Path, monkeypatch) -> None:
+    """'Frame als Bild speichern' writes the full-resolution frame; 'Projekt zurücksetzen' forgets the clip state."""
+    import cv2
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    w = window
+    w.goto(15)
+    w.add_shot()
+    for xy in ((320, 300), (330, 120), (350, 160)):
+        w.on_view_click(*xy)
+    w.goto(40)
+    out = tmp_path / "post.png"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(out), "PNG (*.png)"))
+    w.save_still_dialog()
+    wait_until(app, lambda: not w.tasks.busy() and out.exists(), 60)
+    img = cv2.imread(str(out))
+    assert (img.shape[1], img.shape[0]) == (w.project.width, w.project.height)
+
+    w.project.settings["impact_candidates"] = [{"frame": 3, "time": 0.1, "confidence": 0.2, "sources": ["audio"]}]
+    w.project.style.color = "#123456"
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    w.reset_project()
+    p = w.project
+    assert not p.shots and p.ball_start_hint is None and not p.settings.get("impact_candidates")
+    assert p.style.color == "#123456"  # look is kept
+    w.undo()
+    assert len(w.project.shots) == 1

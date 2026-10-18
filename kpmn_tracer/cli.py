@@ -8,6 +8,8 @@ Examples::
     kpmn-tracer analyze clip.mov --ball 960 1500
     kpmn-tracer batch D:/Range/2026-10-15 --auto-confirm 0.8 --export prores
     kpmn-tracer batch-export D:/Range/2026-10-15
+    kpmn-tracer still clip.mov --frame 120 --out post.jpg
+    kpmn-tracer scorecard
 """
 
 from __future__ import annotations
@@ -96,10 +98,14 @@ def cmd_batch(a: argparse.Namespace) -> int:
     from kpmn_tracer.batch import analyze_folder, export_confirmed, write_summary
     from kpmn_tracer.project.presets import PositionPreset, PresetStore
 
-    preset = PositionPreset(tuple(a.ball_norm)) if a.ball_norm else PresetStore().load_position()
+    preset = None
+    if a.ball_norm:
+        preset = PositionPreset(tuple(a.ball_norm))
+    elif a.last_position:
+        preset = PresetStore().load_position()
     if preset is None:
-        log.warning("No ball position preset - impacts are detected from audio only "
-                    "(set one in the GUI or pass --ball-norm X Y)")
+        log.warning("No ball position - impacts are detected from audio only "
+                    "(pass --ball-norm X Y or --last-position)")
     results = analyze_folder(a.folder, preset, _options(a), a.auto_confirm, a.reanalyze,
                              _progress_printer("batch"))
     summary = write_summary(results, Path(a.folder) / "kpmn_batch_summary.csv")
@@ -123,6 +129,33 @@ def cmd_batch_export(a: argparse.Namespace) -> int:
     if not outs:
         print("nothing confirmed - confirm shots in the GUI review or use 'batch --auto-confirm'")
     return 0
+
+
+def cmd_still(a: argparse.Namespace) -> int:
+    from kpmn_tracer.io.still import save_still
+    from kpmn_tracer.session import ClipSession
+
+    sess = ClipSession.open(a.project)
+    try:
+        occl = None
+        if any(s.occlude for s in sess.project.shots):
+            from kpmn_tracer.segmentation.provider import occlusion_for_session
+
+            occl = occlusion_for_session(sess)
+        out = save_still(sess.project, a.frame, Path(a.out) if a.out else None, occl, a.quality)
+    finally:
+        sess.close()
+    print(out)
+    return 0
+
+
+def cmd_scorecard(a: argparse.Namespace) -> int:
+    from kpmn_tracer.scorecard import open_studio, studio_path
+
+    if a.print_path:
+        print(studio_path())
+        return 0
+    return 0 if open_studio() else 1
 
 
 def _analysis_args(p: argparse.ArgumentParser) -> None:
@@ -168,12 +201,23 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("batch", help="analyse all clips of a folder (range session)")
     p.add_argument("folder")
     p.add_argument("--ball-norm", nargs=2, type=float, metavar=("X", "Y"),
-                   help="ball position as fraction of width/height (default: saved position preset)")
+                   help="ball position as fraction of width/height")
+    p.add_argument("--last-position", action="store_true",
+                   help="use the ball position saved from the last clip (same tripod spot)")
     p.add_argument("--auto-confirm", type=float, metavar="CONF", help="confirm shots with confidence >= CONF")
     p.add_argument("--reanalyze", action="store_true", help="re-run clips that already have shots")
     p.add_argument("--export", choices=["prores", "png", "h264", "h265"], help="export confirmed shots afterwards")
     _analysis_args(p)
     p.set_defaults(fn=cmd_batch)
+    p = sub.add_parser("still", help="save one frame with the tracer as image (png/jpg)")
+    p.add_argument("project", help="clip or .kpmntrace.json")
+    p.add_argument("--frame", type=int, required=True)
+    p.add_argument("--out", help="output .jpg or .png (default: next to the clip)")
+    p.add_argument("--quality", type=int, default=95, help="JPEG quality")
+    p.set_defaults(fn=cmd_still)
+    p = sub.add_parser("scorecard", help="open the Scorecard Studio in the browser")
+    p.add_argument("--print-path", action="store_true", help="only print the path of the HTML file")
+    p.set_defaults(fn=cmd_scorecard)
     p = sub.add_parser("selftest", help="check the installation (FFmpeg, models, export)")
     p.set_defaults(fn=cmd_selftest)
     p = sub.add_parser("batch-export", help="export all confirmed shots of a folder")

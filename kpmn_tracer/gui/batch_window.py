@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDoubleSpinBox,
@@ -63,8 +64,19 @@ class BatchWindow(QDialog):
         top.setStretch(1, 1)
         lay.addLayout(top)
 
+        opts = QHBoxLayout()
+        self.use_preset = QCheckBox("Ballposition vom letzten Clip verwenden (gleicher Stativ-Standort)")
+        self.use_preset.setToolTip("Nur einschalten, wenn alle Clips vom selben Stativ-Platz aus gefilmt sind.")
+        self.use_preset.toggled.connect(self._update_preset_info)
+        self.reanalyze = QCheckBox("Bereits analysierte Clips neu berechnen")
+        self.reanalyze.setToolTip("Unbestätigte Schläge werden verworfen und neu gesucht, bestätigte bleiben.")
+        opts.addWidget(self.use_preset)
+        opts.addWidget(self.reanalyze)
+        opts.addStretch(1)
+        lay.addLayout(opts)
         self.preset_info = QLabel()
         self.preset_info.setStyleSheet("color:#aaa;")
+        self.preset_info.setWordWrap(True)
         lay.addWidget(self.preset_info)
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
@@ -108,12 +120,15 @@ class BatchWindow(QDialog):
     # ------------------------------------------------------------ helpers
     def _update_preset_info(self) -> None:
         pre = PresetStore().load_position()
-        if pre is None:
-            self.preset_info.setText("Kein Positions-Preset: Impacts werden nur über den Ton gefunden. "
-                                     "Tipp: einen Schlag im Editor setzen und speichern – die Ballposition "
-                                     "wird als Preset gemerkt.")
+        if not self.use_preset.isChecked():
+            self.preset_info.setText("Ohne Ballposition werden Impacts nur über den Ton gefunden und nicht "
+                                     "getrackt. Clips mit einem im Editor markierten Ball werden voll analysiert.")
+        elif pre is None:
+            self.preset_info.setText("Noch keine Ballposition gespeichert: einen Schlag im Editor setzen und "
+                                     "speichern – die Ballposition wird gemerkt.")
         else:
-            self.preset_info.setText(f"Positions-Preset: Ball bei {pre.start[0]:.0%} / {pre.start[1]:.0%} des Bildes")
+            self.preset_info.setText(f"Ballposition vom letzten Clip: {pre.start[0]:.0%} / {pre.start[1]:.0%} "
+                                     "des Bildes – wird pro Clip geprüft (nur verwendet, wenn dort ein Ball liegt).")
 
     def browse(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "Ordner mit Clips", self.folder.text())
@@ -132,10 +147,12 @@ class BatchWindow(QDialog):
             QMessageBox.information(self, "Batch", "Bitte einen Ordner wählen.")
             return
         self.list.clear()
-        preset = PresetStore().load_position()
+        preset = PresetStore().load_position() if self.use_preset.isChecked() else None
         opts = self.options_fn() if self.options_fn else None
+        re = self.reanalyze.isChecked()
         self._busy(True)
-        task = self.tasks.start(lambda pr, cancel: analyze_folder(folder, preset, opts, progress=pr, cancel=cancel))
+        task = self.tasks.start(lambda pr, cancel: analyze_folder(folder, preset, opts, reanalyze=re,
+                                                                   progress=pr, cancel=cancel))
         self._task = task
         task.progress.connect(lambda f: self.progress.setValue(int(f * 1000)))
         task.finished.connect(self._done)
