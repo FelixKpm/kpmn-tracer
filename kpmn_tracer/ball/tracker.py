@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from kpmn_tracer.ball.candidates import BallDetector, Candidate
-from kpmn_tracer.ball.flightfit import FitResult, FlightModel, fit_linear, ransac_fit
+from kpmn_tracer.ball.flightfit import FitResult, FlightModel, fit_linear, ransac_fit, refine
 from kpmn_tracer.io.decode import CancelFn, CancelledError, ProgressFn
 
 log = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ class BallTrackParams:
     max_gap_s: float = 0.7
     max_flight_s: float = 9.0
     fit_tol: float = 2.5
+    speed_tol: float = 0.04  # extra assignment tolerance per px of screen speed (launch hypotheses)
     research_tol: float = 3.0
 
 
@@ -53,7 +54,7 @@ class BallTrack:
     points: dict[int, Candidate] = field(default_factory=dict)  # frame -> accepted detection
     fit: FitResult | None = None
     last_frame: int = 0  # last frame the follower looked at
-    local_rms: float = 0.0  # smoothness of the detections (px)
+    local_rms: float = 0.0  # smoothness of the detections (px at low speed, relative to speed)
 
     def arrays(self) -> tuple[np.ndarray, np.ndarray]:
         fs = sorted(self.points)
@@ -84,27 +85,67 @@ class BallTracker:
         n_init = max(self.p.init_min_frames, int(round(self.p.init_frames_s * self.fps)))
         diag = float(np.hypot(self.w, self.h))
         R = self.p.init_radius_frac * diag
-        roi = (int(start[0] - R), int(start[1] - R), int(start[0] + R), int(start[1] + 0.15 * R))
+        # everything above the start: a steep shot close to the camera can cross the
+        # whole picture within the init window (IMG_2366: ~1000 proxy px in 7 frames)
+        roi = (int(start[0] - R), 0, int(start[0] + R), int(start[1] + 0.15 * R))
         cands: list[Candidate] = []
         for f in range(impact + 1, min(self.n, impact + 1 + n_init)):
             dt = f - impact
             for c in self.det.detect(f, roi, ball_r, gap=1 if dt <= 2 else 2):
                 d = np.hypot(c.x - start[0], c.y - start[1])
                 # must have left the start point, move upwards / sideways, and not too far per frame
-                if d < 1.5 * ball_r or c.y > start[1] + 2 * ball_r or d > R * dt / 2 + 10:
+                if d < 1.5 * ball_r or c.y > start[1] + 2 * ball_r or d > 0.75 * R * dt + 10:
                     continue
                 cands.append(c)
         return cands
+
+    def _tol(self, model: FlightModel, t: float) -> float:
+        """Assignment tolerance: fixed part plus a share of the model's screen speed.
+
+        Right after impact a close ball moves hundreds of pixels per frame; a sub-frame
+        error of the impact time (sound delay, rolling shutter) shifts it by tens of px.
+        """
+        step = float(np.hypot(*(model(t)[0] - model(max(t - 1.0, 0.0))[0])))
+        return self.p.fit_tol + self.p.speed_tol * step
 
     def _assign(self, model: FlightModel, cands: list[Candidate], impact: int) -> dict[int, Candidate]:
         """Per frame the candidate closest to the model (within tolerance)."""
         out: dict[int, Candidate] = {}
         best_d: dict[int, float] = {}
         for c in cands:
-            d = float(np.hypot(*(model(c.frame - impact)[0] - (c.x, c.y))))
-            if d < self.p.fit_tol and d < best_d.get(c.frame, np.inf):
+            t = c.frame - impact
+            d = float(np.hypot(*(model(t)[0] - (c.x, c.y))))
+            if d < self._tol(model, t) and d < best_d.get(c.frame, np.inf):
                 out[c.frame], best_d[c.frame] = c, d
         return out
+
+    def _grow(self, sup: dict[int, Candidate], cands: list[Candidate], impact: int,
+              start: tuple[float, float]) -> tuple[FlightModel | None, dict[int, Candidate]]:
+        """Refit on the whole support and re-assign until it is stable.
+
+        A three-point sample extrapolates poorly when the ball decelerates strongly;
+        the refit on all supporting frames reaches the later ones step by step.
+        """
+        model = None
+        for _ in range(4):
+            t = np.array([f - impact for f in sorted(sup)], float)
+            xy = np.array([[sup[f].x, sup[f].y] for f in sorted(sup)], float)
+            m = fit_linear(t, xy, start, perspective=True)
+            if m is None:
+                break
+            if len(t) >= 4:
+                m = refine(m, t, xy)
+            if m.c < -0.9 / max(t.max() * 3, 1):
+                break
+            new = self._assign(m, cands, impact)
+            if len(new) < len(sup):
+                break
+            model = m
+            if set(new) == set(sup) and all(new[f] is sup[f] for f in new):
+                sup = new
+                break
+            sup = new
+        return model, sup
 
     def _hypotheses(self, impact: int, start: tuple[float, float], ball_r: float,
                     max_hyp: int = 6, iters: int = 3000) -> list[BallTrack]:
@@ -150,18 +191,22 @@ class BallTracker:
             if key in seen:
                 continue
             seen.add(key)
+            grown, sup = self._grow(sup, cands, impact, start)
+            m = grown or m
             err = sum(float(np.hypot(*(m(f - impact)[0] - (c.x, c.y)))) for f, c in sup.items())
-            found.append((len(sup), err, sup))
+            found.append((len(sup), err, sup, m))
         found.sort(key=lambda h: (-h[0], h[1]))
         out: list[BallTrack] = []
-        for _n, _e, sup in found:
+        for _n, _e, sup, m in found:
             ids = {id(c) for c in sup.values()}
             if any(len(ids & {id(c) for c in h.points.values()}) > 0.5 * len(ids) for h in out):
                 continue  # essentially the same hypothesis
             tr = BallTrack(impact, start, dict(sup))
             tr.fit = ransac_fit(*tr.arrays(), start, tol=self.p.fit_tol, perspective=True)
-            if tr.fit is None:
-                continue
+            if tr.fit is None or tr.fit.inliers.sum() < len(sup):
+                t, xy = tr.arrays()  # fast launch: the speed-scaled fit is the better summary
+                r = np.linalg.norm(m(t) - xy, axis=1)
+                tr.fit = FitResult(m, np.ones(len(t), bool), float(np.sqrt(np.mean(r * r))))
             out.append(tr)
             if len(out) >= max_hyp:
                 break
@@ -285,7 +330,14 @@ class BallTracker:
         if added:
             self._remove_local_outliers(track)
         t, xy = track.arrays()
-        track.local_rms = float(np.sqrt(np.mean(self._local_residuals(t, xy) ** 2))) if len(t) >= 4 else 0.0
+        track.local_rms = 0.0
+        if len(t) >= 4:
+            # relative to the local screen speed: a fast, strongly decelerating launch is
+            # less "smooth" in pixels than a slow club head, but not less plausible
+            step = np.hypot(*np.diff(xy, axis=0).T)
+            speed = np.maximum(np.r_[step[0], step], np.r_[step, step[-1]])
+            res = self._local_residuals(t, xy) / (1.0 + self.p.speed_tol * speed)
+            track.local_rms = float(np.sqrt(np.mean(res ** 2)))
         # global model: only used for the landing estimate and as a fallback trajectory
         fit = ransac_fit(t, xy, track.start, tol=self.p.fit_tol, perspective=True)
         track.fit = fit or ransac_fit(t, xy, track.start, tol=self.p.fit_tol, perspective=False)
