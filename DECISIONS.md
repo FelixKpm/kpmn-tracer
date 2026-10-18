@@ -351,7 +351,8 @@ statische Seite hostbar.
   Grundfarben, Rest abgeleitet über Kontrast/Mischung), Schriftpaar, Hintergrund (Fairway+Tracer,
   Mähstreifen, schlicht), Logo (Data-URL, rund/eckig), Marke und Handle. Halbtransparente Flächen
   werden aus der Textfarbe abgeleitet, damit helle Designs funktionieren.
-* *NightRange · teeoff.kpmn* ist exakt das ursprüngliche Design inkl. Logo und bleibt Vorlage; vier
+* *NightRange · teeoff.kpmn* ist das ursprüngliche Design (Farben, Schrift, Marke; das Kanal-Logo
+  wurde vor der Veröffentlichung entfernt, D42) und bleibt Vorlage; vier
   neutrale Vorlagen ohne Marke. Änderungen an einer Vorlage erzeugen automatisch ein eigenes Design
   (Browser-Speicher), Export/Import als JSON.
 * Logos liegen als Data-URL im Design, weil Bilder von `file://` den Canvas für den PNG-Export
@@ -389,3 +390,11 @@ Testsuite, den Selbsttest des fertigen Pakets und einen GUI-Starttest aus.
   meldet die App das klar und arbeitet ohne Personen-Maske weiter (vorher: Fehlerdialog, Abbruch).
 * **Kleinigkeiten:** Tastenkürzel-Texte mit ⌘ auf dem Mac, Einstellungen/Beenden im App-Menü,
   Standardschrift je System, Tests blockieren nie an modalen Dialogen, Test-Timeouts in CI.
+
+## D42 – Veröffentlichung als Open Source (GPL-3.0)
+* Lizenz **GPL-3.0-or-later**: passt zum mitgelieferten GPL-FFmpeg (x264/x265, `--enable-version3`)
+  und hält Weiterentwicklungen offen.
+* Vor dem Öffentlichmachen wurde die **komplette Git-Geschichte** bereinigt: das Kanal-Logo aus der
+  NightRange-Vorlage entfernt und die private Autor-E-Mail durch die anonyme GitHub-Adresse ersetzt.
+  Releases, deren Downloads das Logo enthielten (0.2.0–0.3.0), wurden gelöscht und durch 0.3.1
+  ersetzt; alte Build-Artefakte und Workflow-Läufe wurden entfernt.

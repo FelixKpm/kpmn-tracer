@@ -163,6 +163,9 @@ daneben; gewünscht: Frame mit Tracer als Bild, Scorecard-Generator mit austausc
   jedem System laufen alle Tests, der Selbsttest des Pakets und ein GUI-Starttest (D41).
 - Installationsanleitung für alle drei Systeme im README.
 
+## Nachtrag 5 – Open Source (v0.3.1)
+- Lizenz GPL-3.0-or-later, Repository öffentlich; Logo und private E-Mail aus der Geschichte entfernt (D42).
+
 ## Definition of Done – Abgleich
 | Kriterium | Stand |
 |---|---|

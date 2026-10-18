@@ -38,11 +38,12 @@ def test_builtin_designs_are_complete() -> None:
             assert HEX.match(t["colors"][k]), (t["id"], k)
         assert t["background"] in ("fairway", "stripes", "plain")
         assert t["logo"] is None or t["logo"].startswith("data:image/")
-    # the original NightRange design (with its logo) stays available as a template
+    # the original NightRange colours stay available as a template (without the channel logo)
     nr = next(t for t in themes if t["id"] == "nightrange")
-    assert nr["logo"] and nr["handle"] == "@teeoff.kpmn" and nr["colors"]["accent"] == "#C6F432"
-    # ... but the other templates are brand-neutral
-    assert all(not t["brand"] and not t["handle"] and t["logo"] is None for t in themes if t["id"] != "nightrange")
+    assert nr["handle"] == "@teeoff.kpmn" and nr["colors"]["accent"] == "#C6F432"
+    assert all(t["logo"] is None for t in themes)  # no logos are shipped
+    # ... and the other templates are brand-neutral
+    assert all(not t["brand"] and not t["handle"] for t in themes if t["id"] != "nightrange")
 
 
 def test_page_has_no_hard_wired_brand() -> None:

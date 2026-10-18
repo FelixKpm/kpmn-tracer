@@ -252,6 +252,12 @@ Nur nötig, wenn die klassische Erkennung bei eigenen Clips nicht reicht (DECISI
 analysierten Clips erzeugen, mit `tools/label_balls.py` prüfen, mit `tools/train_yolo.py` trainieren,
 Modell in den Einstellungen wählen. Ultralytics steht unter AGPL-3.0 und ist nicht im Build enthalten.
 
-## Lizenzen von Drittkomponenten
-FFmpeg (GPL-Build, Lizenztext in `_internal\ffmpeg\LICENSE.txt`), Qt/PySide6 (LGPL), OpenCV
-(Apache 2.0), MediaPipe und Modelle (Apache 2.0), NumPy/SciPy (BSD).
+## Lizenz
+KPMN Tracer ist freie Software unter der **GNU General Public License v3.0 oder später**
+([LICENSE](LICENSE)): nutzen, weitergeben und verändern erlaubt – Weitergaben (auch veränderte)
+müssen wieder mit Quellcode unter derselben Lizenz erfolgen.
+
+### Drittkomponenten
+FFmpeg (GPL-Build; Windows: BtbN, macOS/Linux: Martin Riedl – Lizenzhinweis im Ordner `ffmpeg`
+des Programms), Qt/PySide6 (LGPL), OpenCV (Apache 2.0), MediaPipe und Modelle (Apache 2.0),
+NumPy/SciPy (BSD).
