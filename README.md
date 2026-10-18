@@ -44,7 +44,8 @@ werden. Downloads: Seite *Releases* des Repositorys.
 2. Starten: `KPMN-Tracer/kpmn-tracer-gui` – oder einmal `KPMN-Tracer/install.sh` ausführen, dann
    steht KPMN Tracer im Anwendungsmenü und `kpmn-tracer` auf der Kommandozeile.
 3. Öffnet sich kein Fenster, fehlen Qt-Systembibliotheken, z. B. Ubuntu/Debian:
-   `sudo apt install libxcb-cursor0 libxkbcommon-x11-0 libegl1`.
+   `sudo apt install libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgles2`.
+   (`libgles2` braucht die Personen-Maske; fehlt sie, arbeitet die App ohne Maske weiter.)
 
 ### Aus dem Quellcode (Entwicklung, alle Systeme)
 Python 3.12 oder 3.13:

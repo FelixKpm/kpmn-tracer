@@ -796,6 +796,7 @@ class MainWindow(QMainWindow):
             return
         from kpmn_tracer.camera.shot_camera import analyze_shot_camera
         from kpmn_tracer.camera.tracker import track_range_for_shot
+        from kpmn_tracer.io.decode import CancelledError
         from kpmn_tracer.segmentation.provider import compute_masks, tracking_mask_fn
 
         sess = self.session
@@ -811,7 +812,9 @@ class MainWindow(QMainWindow):
                 a, b = track_range_for_shot(shot.impact_frame, shot.flight_frames(p.fps), p.fps, p.frame_count)
                 try:
                     masks = compute_masks(sess, a, b, progress=lambda f: pr(0.5 * f), cancel=cancel)
-                except (FileNotFoundError, ImportError, RuntimeError) as exc:
+                except CancelledError:
+                    raise
+                except (OSError, ImportError, RuntimeError) as exc:
                     log.warning("Person mask unavailable, tracking without: %s", exc)
             mfn = tracking_mask_fn(masks, (sess.reader.width, sess.reader.height)) if masks else None
             off = 0.5 if use_mask else 0.0

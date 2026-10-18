@@ -21,4 +21,4 @@ ln -sf "$DIR/kpmn-tracer" "$BIN/kpmn-tracer"
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" || true
 echo "KPMN Tracer is now in your application menu; command line: kpmn-tracer (in ~/.local/bin)."
 echo "Tip: if the window does not open, install the Qt runtime libraries, e.g. on Ubuntu/Debian:"
-echo "     sudo apt install libxcb-cursor0 libxkbcommon-x11-0 libegl1"
+echo "     sudo apt install libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgles2"

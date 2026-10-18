@@ -61,14 +61,19 @@ class MediaPipeSegmenter:
         self._mp = mp
         self._lock = threading.Lock()
         opts = BaseOptions(model_asset_path=str(model_path(model)))
-        if model == "pose":
-            self._task = vision.PoseLandmarker.create_from_options(vision.PoseLandmarkerOptions(
-                base_options=opts, running_mode=vision.RunningMode.IMAGE, num_poses=2,
-                output_segmentation_masks=True, min_pose_detection_confidence=0.3))
-        else:
-            self._task = vision.ImageSegmenter.create_from_options(vision.ImageSegmenterOptions(
-                base_options=opts, running_mode=vision.RunningMode.IMAGE,
-                output_confidence_masks=True, output_category_mask=False))
+        try:
+            if model == "pose":
+                self._task = vision.PoseLandmarker.create_from_options(vision.PoseLandmarkerOptions(
+                    base_options=opts, running_mode=vision.RunningMode.IMAGE, num_poses=2,
+                    output_segmentation_masks=True, min_pose_detection_confidence=0.3))
+            else:
+                self._task = vision.ImageSegmenter.create_from_options(vision.ImageSegmenterOptions(
+                    base_options=opts, running_mode=vision.RunningMode.IMAGE,
+                    output_confidence_masks=True, output_category_mask=False))
+        except OSError as exc:  # Linux: MediaPipe's native library needs the system's OpenGL ES/EGL
+            raise RuntimeError(
+                f"Personen-Maske nicht verfügbar – eine Systembibliothek fehlt ({exc}). "
+                "Ubuntu/Debian: sudo apt install libgles2 libegl1") from exc
 
     def segment(self, bgr: np.ndarray) -> np.ndarray:
         h, w = bgr.shape[:2]
