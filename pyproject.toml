@@ -1,7 +1,9 @@
 [project]
 name = "kpmn-tracer"
-version = "0.3.0"
+version = "0.3.1"
 description = "Adds a TV-style ball tracer to golf range videos"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 
 [project.scripts]
