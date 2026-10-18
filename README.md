@@ -1,14 +1,16 @@
 # KPMN Tracer
 
-Windows-Desktop-App, die Golf-Videos von der Driving Range (iPhone, Stativ oder aus der Hand) mit
+Desktop-App für **Windows, macOS und Linux**, die Golf-Videos (iPhone, Stativ oder aus der Hand) mit
 einem TV-ähnlichen Ball-Tracer versieht. Der Tracer wird als **Overlay mit Alpha-Kanal** exportiert
-und in DaVinci Resolve frame-genau über den Originalclip gelegt – das Original wird nie verändert.
+und in DaVinci Resolve frame-genau über den Originalclip gelegt – oder direkt als fertiges Video bzw.
+Bild zum Posten. Das Original wird nie verändert.
 
 * Ball wird automatisch erkannt und verfolgt (oder mit wenigen Klicks gesetzt/korrigiert)
 * Kamerawackeln wird kompensiert – der Tracer „klebt“ in der Welt
 * Tracer kann hinter dem Golfer verlaufen (Personen-Maske)
 * Schlagmomente werden über Ton und Video automatisch gefunden
 * Batch-Verarbeitung einer ganzen Range-Session mit Review-Liste
+* Scorecard Studio für Scorecard-Grafiken
 
 Status und technische Details: [PROGRESS.md](PROGRESS.md), [DECISIONS.md](DECISIONS.md).
 
@@ -16,23 +18,49 @@ Status und technische Details: [PROGRESS.md](PROGRESS.md), [DECISIONS.md](DECISI
 
 ## Installation
 
-### Fertiger Build (empfohlen)
-1. `KPMN-Tracer-<version>-win64.zip` entpacken (z. B. nach `C:\Programme\KPMN-Tracer`).
-2. `KPMN Tracer.exe` starten. FFmpeg und die Modelle sind enthalten, es muss nichts installiert werden.
+FFmpeg und die Modelle sind in allen Downloads enthalten, es muss nichts zusätzlich installiert
+werden. Downloads: Seite *Releases* des Repositorys.
+
+### Windows 10/11 (64 Bit)
+1. `KPMN-Tracer-<version>-windows-x64.zip` entpacken (z. B. nach `C:\Programme\KPMN-Tracer`).
+2. `KPMN Tracer.exe` starten. Zeigt Windows „Der Computer wurde durch Windows geschützt“:
+   *Weitere Informationen* → *Trotzdem ausführen* (die App ist nicht kostenpflichtig signiert).
 3. Optional prüfen: `kpmn-tracer.exe selftest` in einer Eingabeaufforderung im selben Ordner.
 
-Beim allerersten Start kann der Virenscanner die mitgelieferten Programme einige Sekunden prüfen.
+### macOS 12 oder neuer
+* Apple Silicon (M1–M4): `KPMN-Tracer-<version>-macos-arm64.dmg`
+* Intel-Mac: `KPMN-Tracer-<version>-macos-x64.dmg`
 
-### Aus dem Quellcode (Entwicklung)
-```powershell
-py -3.13 -m venv .venv
-.venv\Scripts\python -m pip install -r requirements-dev.txt
-.venv\Scripts\python tools\fetch_ffmpeg.py    # ffmpeg + ffprobe nach vendor\ffmpeg
-.venv\Scripts\python tools\fetch_models.py    # MediaPipe-Modelle nach vendor\models
-.venv\Scripts\python -m kpmn_tracer            # GUI
-.venv\Scripts\python -m pytest                 # Tests
-.venv\Scripts\python tools\build_windows.py    # Build -> dist\KPMN-Tracer + ZIP
+1. DMG öffnen, **KPMN Tracer** auf *Programme* ziehen.
+2. Erster Start: Die App ist nicht bei Apple notarisiert, macOS blockiert sie deshalb einmal.
+   macOS 15 und neuer: öffnen → Meldung schließen → *Systemeinstellungen › Datenschutz & Sicherheit*
+   → ganz unten *Trotzdem öffnen*. macOS 12–14: Rechtsklick auf die App → *Öffnen* → *Öffnen*.
+   Oder im Terminal: `xattr -dr com.apple.quarantine "/Applications/KPMN Tracer.app"`.
+3. Tastenkürzel: Wo diese Anleitung **Strg** schreibt, ist auf dem Mac **⌘** gemeint.
+4. Kommandozeile (optional): `"/Applications/KPMN Tracer.app/Contents/MacOS/kpmn-tracer" selftest`.
+
+### Linux (x86_64, z. B. Ubuntu 22.04+, Fedora, Mint)
+1. `KPMN-Tracer-<version>-linux-x64.tar.gz` entpacken: `tar xzf KPMN-Tracer-*-linux-x64.tar.gz`
+2. Starten: `KPMN-Tracer/kpmn-tracer-gui` – oder einmal `KPMN-Tracer/install.sh` ausführen, dann
+   steht KPMN Tracer im Anwendungsmenü und `kpmn-tracer` auf der Kommandozeile.
+3. Öffnet sich kein Fenster, fehlen Qt-Systembibliotheken, z. B. Ubuntu/Debian:
+   `sudo apt install libxcb-cursor0 libxkbcommon-x11-0 libegl1 libgles2`.
+   (`libgles2` braucht die Personen-Maske; fehlt sie, arbeitet die App ohne Maske weiter.)
+
+### Aus dem Quellcode (Entwicklung, alle Systeme)
+Python 3.12 oder 3.13:
+```sh
+python -m venv .venv                       # Windows: py -3.13 -m venv .venv
+. .venv/bin/activate                       # Windows: .venv\Scripts\activate
+python -m pip install -r requirements-dev.txt -e .
+python tools/fetch_ffmpeg.py               # ffmpeg + ffprobe nach vendor/ffmpeg
+python tools/fetch_models.py               # MediaPipe-Modelle nach vendor/models
+python -m kpmn_tracer                      # GUI
+python -m pytest                           # Tests
+python tools/build.py                      # Build für das aktuelle System -> dist/
 ```
+Builds für alle Systeme entstehen in GitHub Actions (`.github/workflows/build.yml`): bei jedem Tag
+`v*` automatisch als Entwurf eines Releases, sonst über *Actions › build › Run workflow*.
 
 ---
 
@@ -183,12 +211,12 @@ Ball. Ab 0.2.0 passiert das nur noch auf Wunsch. Bereits gespeicherte Projekte m
 Der Ton ist die zuverlässigste Quelle. Ohne Ton (oder in Zeitlupe) muss der Ball vorher sichtbar
 ruhig an der markierten Stelle liegen. Sonst den Schlag von Hand anlegen (**N** am Schlagmoment).
 
-**„ffmpeg/ffprobe not found“** (nur Quellcode-Variante): `python tools\fetch_ffmpeg.py` ausführen
-oder `KPMN_FFMPEG_DIR` auf einen Ordner mit ffmpeg.exe/ffprobe.exe setzen.
+**„ffmpeg/ffprobe not found“** (nur Quellcode-Variante): `python tools/fetch_ffmpeg.py` ausführen
+oder `KPMN_FFMPEG_DIR` auf einen Ordner mit ffmpeg/ffprobe setzen.
 
 **Personen-Maske fehlt** (nur Quellcode-Variante): `python tools\fetch_models.py`.
 
-**Log-Datei** für Fehlerberichte: `%USERPROFILE%\.kpmn_tracer\kpmn_tracer.log`.
+**Log-Datei** für Fehlerberichte: `kpmn_tracer.log` im Ordner `.kpmn_tracer` deines Benutzerordners (Windows `%USERPROFILE%\.kpmn_tracer`, macOS/Linux `~/.kpmn_tracer`).
 
 ---
 
@@ -205,7 +233,8 @@ kpmn-tracer.exe still clip.mov --frame 120 --out post.jpg  # Einzelbild mit Trac
 kpmn-tracer.exe scorecard                                  # Scorecard Studio im Browser
 ```
 `batch` verwendet die Ballposition des letzten Clips nur mit `--last-position`.
-Aus dem Quellcode: `python -m kpmn_tracer …`.
+Unter macOS heißt das Programm `"/Applications/KPMN Tracer.app/Contents/MacOS/kpmn-tracer"`, unter Linux `kpmn-tracer`
+(nach `install.sh`). Aus dem Quellcode: `python -m kpmn_tracer …`.
 
 ## Dateien
 
@@ -214,7 +243,7 @@ Aus dem Quellcode: `python -m kpmn_tracer …`.
 | `<clip>.kpmntrace.json` | Projekt: Schläge, Punkte, Kamerapfad, Korrekturen, Style – nachbearbeitbar ohne Neuberechnung |
 | `.kpmn_cache\` (neben dem Clip) | Vorschau-Proxy, Personen-Masken, Audio – kann jederzeit gelöscht werden |
 | `kpmn_review\` | Thumbnails des Batch-Reviews |
-| `%USERPROFILE%\.kpmn_tracer\` | Style-Presets, Ballposition des letzten Clips, Einstellungen, Log |
+| `~/.kpmn_tracer/` (Windows `%USERPROFILE%\.kpmn_tracer\`) | Style-Presets, Ballposition des letzten Clips, Einstellungen, Log |
 | Browser-Speicher (Scorecard Studio) | Eingetragene Runde und eigene Designs (Export als JSON zur Sicherung) |
 
 ## Optionale ML-Ballerkennung

@@ -108,3 +108,24 @@ def range_session_gui(media_dir: Path, tmp_path_factory: pytest.TempPathFactory)
     truth = generate(cfg, media_dir, "range_gui")
     sess = ClipSession.open(media_dir / "range_gui.mp4", cache_root=tmp_path_factory.mktemp("c"))
     return sess, truth
+
+
+@pytest.fixture(autouse=True)
+def no_modal_message_boxes(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """A modal QMessageBox would block a headless test run forever; record the text instead."""
+    shown: list[str] = []
+    try:
+        from PySide6.QtWidgets import QMessageBox
+    except ImportError:  # pragma: no cover
+        return shown
+
+    def fake(kind: str):
+        def show(_parent, title, text, *a, **k):
+            shown.append(f"{kind}: {title}: {text}")
+            print(f"[QMessageBox.{kind}] {title}: {text}")
+            return QMessageBox.StandardButton.Ok
+        return show
+
+    for kind in ("critical", "warning", "information"):
+        monkeypatch.setattr(QMessageBox, kind, fake(kind))
+    return shown

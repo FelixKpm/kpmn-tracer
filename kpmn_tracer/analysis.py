@@ -14,7 +14,7 @@ import numpy as np
 from kpmn_tracer.ball.auto import MAX_FLIGHT_S, AutoResult, apply_to_shot, auto_track, prefill_without_track
 from kpmn_tracer.camera.shot_camera import analyze_shot_camera
 from kpmn_tracer.camera.tracker import track_range_for_shot
-from kpmn_tracer.io.decode import CancelFn, ProgressFn
+from kpmn_tracer.io.decode import CancelFn, CancelledError, ProgressFn
 from kpmn_tracer.session import ClipSession
 from kpmn_tracer.trace.model import AnchorKind, Shot
 
@@ -78,7 +78,9 @@ def analyze_shot(
             a_, b_ = track_range_for_shot(shot.impact_frame, shot.flight_frames(p.fps), p.fps, p.frame_count)
             try:
                 masks = compute_masks(session, a_, b_, progress=_sub(progress, 0.0, 0.3), cancel=cancel)
-            except (FileNotFoundError, ImportError, RuntimeError) as exc:
+            except CancelledError:
+                raise
+            except (OSError, ImportError, RuntimeError) as exc:
                 log.warning("Person mask unavailable: %s", exc)
         mfn = None
         if masks is not None:

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=KPMN Tracer
+GenericName=Golf Shot Tracer
+Comment=TV-style ball tracer for golf videos
+Exec="@DIR@/kpmn-tracer-gui" %f
+Icon=kpmn-tracer
+Terminal=false
+Categories=AudioVideo;Video;
+MimeType=video/quicktime;video/mp4;video/x-matroska;
+StartupWMClass=kpmn-tracer-gui

@@ -9,6 +9,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPen, QWheelEvent
 from PySide6.QtWidgets import QWidget
 
+from kpmn_tracer.gui.keys import native
+
 HANDLE_RADIUS = 7.0
 
 
@@ -95,7 +97,7 @@ class VideoView(QWidget):
         if self._img is None:
             p.setPen(QColor(160, 160, 160))
             p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                       "Clip öffnen (Strg+O) oder Datei hierher ziehen")
+                       native("Clip öffnen (Strg+O) oder Datei hierher ziehen"))
             return
         w, h = self.image_size()
         o, s = self._origin(), self._scale()

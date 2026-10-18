@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from kpmn_tracer.gui.keys import native
+
 ACCENT = QColor(255, 200, 40)  # tracer yellow, also used for the impact markers
 DIM = QColor(0, 0, 0, 165)
 
@@ -110,7 +112,7 @@ class TourOverlay(QWidget):
         self.index = max(0, min(i, len(self.steps) - 1))
         st = self.steps[self.index]
         self.title.setText(st.title)
-        self.text.setText(st.text)
+        self.text.setText(native(st.text))
         n = len(self.steps)
         self.count.setText(f"{self.index + 1} / {n}")
         self.back_btn.setEnabled(self.index > 0)
@@ -120,7 +122,8 @@ class TourOverlay(QWidget):
     # ------------------------------------------------------------ geometry
     def _target_rect(self) -> QRect:
         st = self.steps[self.index]
-        widgets = [w for w in (st.targets() if st.targets else []) if w is not None and w.isVisible()]
+        widgets = [w for w in (st.targets() if st.targets else [])
+                   if w is not None and w.isVisible() and not QWidget.size(w).isEmpty()]  # macOS: native menu bar
         rect = QRect()
         for w in widgets:
             if self.scroll is not None and self.scroll.widget() is not None and self.scroll.widget().isAncestorOf(w):
