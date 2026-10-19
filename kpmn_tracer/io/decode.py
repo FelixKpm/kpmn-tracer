@@ -231,6 +231,8 @@ def make_proxy(
     tmp = out.with_name(out.stem + ".tmp.avi")
     todo = [pl for pl in proxy_pipelines(info, size, vfr_mode)
             if (pipelines is None or pl.name in pipelines) and pl.name not in _FAILED_PIPELINES]
+    if not todo:
+        raise RuntimeError(f"no proxy pipeline available ({pipelines})")
     for i, pl in enumerate(todo):
         last = i == len(todo) - 1
         try:
