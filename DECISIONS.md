@@ -398,3 +398,36 @@ Testsuite, den Selbsttest des fertigen Pakets und einen GUI-Starttest aus.
   NightRange-Vorlage entfernt und die private Autor-E-Mail durch die anonyme GitHub-Adresse ersetzt.
   Releases, deren Downloads das Logo enthielten (0.2.0–0.3.0), wurden gelöscht und durch 0.3.1
   ersetzt; alte Build-Artefakte und Workflow-Läufe wurden entfernt.
+
+## D43 – Lange Sessions in 4K/120 fps HDR (IMG_2367.MOV, 11,6 min, 83.845 Frames)
+Vorher: Laden ~2,7 h, Schlag-Erkennung hing 28 min bei „17 %" und fand **0 Schläge**, jeder Schlag
+danach ~8 min Analyse. Ursachen und Lösungen:
+* **Analyse-Kopie (Proxy):** Software-HEVC-Dekodierung (~35 fps) und Float-Tonemapping jedes 4K-Frames
+  (~9 fps). Auf NVIDIA-Karten jetzt CUDA-Dekodierung + -Skalierung und Tonemapping mit libplacebo
+  (Vulkan) mit fester Kurve (`gamma`, ohne Peak-Erkennung: `tonemap_opencl` passt die Helligkeit
+  laufend an die Szene an); nur die kleinen Proxy-Frames gehen zur CPU – ~120 statt 8,7 fps.
+  Rotation explizit (`-noautorotate` + `transpose`). Fällt die GPU-Kette aus (anderer Grafikchip,
+  falsche Frame-Zahl), wird automatisch die CPU-Kette genommen, die jetzt *vor* dem Tonemapping
+  skaliert (2× schneller). Frame-Zählung über Pakete statt Dekodieren (18 s statt 14 min).
+  Die MJPEG-Qualität bleibt bei 2: schon Stufe 3 kostet bei schwachen Bällen Genauigkeit (Tests
+  `faint_ball`, `handheld_vanishes`), dafür ist der Proxy groß (dieser Clip: ~36 GB).
+* **Schlag-Erkennung:** Die Bild-Erkennung beobachtete *eine* Stelle (wo der Ball beim Klick lag).
+  In einer echten Session wird an mehreren Stellen aufgeteet, die Stelle war fast immer leer → alle
+  245 Geräusche (Nachbarboxen!) galten als „fremd". Neu: Für jedes Geräusch werden vier Frames
+  (−0,3/−0,1 s, +0,2/+0,3 s) angesehen – verschwindet in der Schlagzone (8 % der Bildgröße um den
+  geklickten Ball) ein ruhender, heller, ballgroßer Fleck, ist es ein eigener Schlag, und der Fleck
+  ist zugleich der Startpunkt dieses Schlags. 245 Geräusche in ~27 s; alle 23 Schläge gefunden (an
+  drei Tee-Positionen), Nachbarboxen, Probeschwünge, Schuhspitzen und Hände verworfen; ein leiser
+  Fehltreffer bleibt übrig und fällt durch die Ballverfolgung (kein Flug → niedrige Konfidenz).
+  Farbe hilft nicht (driftet mit dem Licht über die Session). Das Frame-für-Frame-Abtasten und die
+  Abflug-Prüfung (`launch_seen`, einmal 17 min für *einen* Kandidaten) laufen nur noch bei Clips bis
+  2 min oder ohne Ton.
+* **Pro Schlag:** Ballverfolgung: Zuordnung vektorisiert, kurze Vorwärtssprünge im Proxy werden
+  durchgelesen statt gesucht (ein Suchen kostet ~10 dekodierte Frames), Personenmasken pro Frame
+  gecacht – Ergebnis bit-gleich, ~8 → ~3–5 min pro Schlag bei 4K/120 fps.
+* **Bewusst nicht übernommen** (getestet, kosteten Genauigkeit bei schwachen Bällen): großzügigere
+  Stativ-Erkennung (das Handy am Boden vibriert um bis zu 0,9 px, wenn jemand vorbeigeht – das
+  Ausgleichen hilft der Ballerkennung messbar), Personenmasken in gleicher Zeitrate (jeder 4./8.
+  statt jeder 2. Frame bei 120 fps) und eine stärkere JPEG-Kompression des Proxys.
+* **Offen:** Mehrere Schläge parallel analysieren (OpenCV gibt den GIL frei) – braucht getrennte
+  Reader/Masken-Caches je Schlag.

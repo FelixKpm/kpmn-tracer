@@ -99,24 +99,30 @@ class BallTracker:
                 cands.append(c)
         return cands
 
-    def _tol(self, model: FlightModel, t: float) -> float:
+    def _tol(self, model: FlightModel, t: np.ndarray) -> np.ndarray:
         """Assignment tolerance: fixed part plus a share of the model's screen speed.
 
         Right after impact a close ball moves hundreds of pixels per frame; a sub-frame
         error of the impact time (sound delay, rolling shutter) shifts it by tens of px.
         """
-        step = float(np.hypot(*(model(t)[0] - model(max(t - 1.0, 0.0))[0])))
+        step = np.hypot(*(model(t) - model(np.maximum(t - 1.0, 0.0))).T)
         return self.p.fit_tol + self.p.speed_tol * step
 
     def _assign(self, model: FlightModel, cands: list[Candidate], impact: int) -> dict[int, Candidate]:
         """Per frame the candidate closest to the model (within tolerance)."""
         out: dict[int, Candidate] = {}
+        if not cands:
+            return out
+        # vectorised: a 120 fps shot has thousands of candidates, refitted hundreds of times
+        t = np.array([c.frame - impact for c in cands], float)
+        xy = np.array([(c.x, c.y) for c in cands], float)
+        d = np.hypot(*(model(t) - xy).T)
+        ok = d < self._tol(model, t)
         best_d: dict[int, float] = {}
-        for c in cands:
-            t = c.frame - impact
-            d = float(np.hypot(*(model(t)[0] - (c.x, c.y))))
-            if d < self._tol(model, t) and d < best_d.get(c.frame, np.inf):
-                out[c.frame], best_d[c.frame] = c, d
+        for i in np.flatnonzero(ok):
+            c = cands[i]
+            if d[i] < best_d.get(c.frame, np.inf):
+                out[c.frame], best_d[c.frame] = c, float(d[i])
         return out
 
     def _grow(self, sup: dict[int, Candidate], cands: list[Candidate], impact: int,

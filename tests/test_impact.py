@@ -149,3 +149,35 @@ def test_two_hits_from_neighbouring_bays_close_together() -> None:
         x[int(tt * sr):int(tt * sr) + c.size] += c
     times = [o.time for o in detect_onsets(x, sr)]
     assert len(times) == 2 and abs(times[1] - 1.42) < 0.002
+
+
+def test_vanished_ball_anywhere_in_the_zone_but_not_a_club_head() -> None:
+    """D43: the tee spot changes during a session; a club head arriving is no hit."""
+    import cv2
+
+    from kpmn_tracer.ball.impact import vanished_ball
+
+    fps, hit = 30.0, 60
+    rng = np.random.default_rng(3)
+    turf = np.clip(rng.normal(100, 6, (300, 400, 3)), 0, 255).astype(np.uint8)
+    turf[..., 1] = np.clip(turf[..., 1].astype(int) + 40, 0, 255)
+
+    def frames(kind: str):
+        def read(f: int) -> np.ndarray:
+            img = turf.copy()
+            swing = (f * 37) % 120  # golfer/club moving elsewhere in the zone, different every frame
+            cv2.rectangle(img, (20 + swing // 4, 20), (60 + swing // 4, 120), (30, 30, 30), -1)
+            if kind == "hit" and f <= hit:
+                cv2.circle(img, (260, 170), 7, (60, 220, 230), -1, cv2.LINE_AA)  # yellow ball, 60 px off the hint
+            if kind == "stays":
+                cv2.circle(img, (260, 170), 7, (60, 220, 230), -1, cv2.LINE_AA)
+            if kind == "club" and f > hit:
+                cv2.ellipse(img, (260, 170), (12, 7), 0, 0, 360, (25, 25, 25), -1)  # club head soled at address
+            return img
+        return read
+
+    got = vanished_ball(frames("hit"), hit, 200, (200.0, 160.0), 120.0, fps, 7.0)
+    assert got is not None and abs(got[0] - 260) < 2 and abs(got[1] - 170) < 2 and 4 < got[2] < 11
+    assert vanished_ball(frames("club"), hit, 200, (200.0, 160.0), 120.0, fps, 7.0) is None
+    assert vanished_ball(frames("stays"), hit, 200, (200.0, 160.0), 120.0, fps, 7.0) is None
+    assert vanished_ball(frames("hit"), hit, 200, (200.0, 160.0), 120.0, fps, None) is not None  # radius unknown

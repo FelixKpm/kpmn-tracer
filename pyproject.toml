@@ -1,6 +1,6 @@
 [project]
 name = "kpmn-tracer"
-version = "0.3.1"
+version = "0.3.2"
 description = "Adds a TV-style ball tracer to golf range videos"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
