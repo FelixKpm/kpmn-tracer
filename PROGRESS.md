@@ -166,13 +166,21 @@ daneben; gewünscht: Frame mit Tracer als Bild, Scorecard-Generator mit austausc
 ## Nachtrag 5 – Open Source (v0.3.1)
 - Lizenz GPL-3.0-or-later, Repository öffentlich; Logo und private E-Mail aus der Geschichte entfernt (D42).
 
+## Nachtrag 6 – lange 4K/120-fps-HDR-Session (v0.3.2)
+- Nutzer-Clip IMG_2367.MOV (8,6 GB, 11,6 min, 83.845 Frames, 22 Schläge, viele Nachbarboxen):
+  Analyse-Kopie auf NVIDIA-GPUs ~14× schneller, Schlag-Erkennung 28 min/0 Treffer → ~1 min/alle
+  23 Schläge (1 Fehltreffer mit niedriger Konfidenz), Analyse pro Schlag ~8 → ~3–5 min, Ergebnis
+  unverändert (D43).
+- Neue Tests: verschwundener Ball an wechselnder Tee-Position vs. Schlägerkopf, GPU- gegen CPU-Proxy
+  (frame-genau, Drehung, HDR).
+
 ## Definition of Done – Abgleich
 | Kriterium | Stand |
 |---|---|
 | Stativ- und Handheld-Clip importieren, Ball automatisch getrackt oder mit wenigen Klicks korrigiert | ✅ synthetisch (≤ 0,5 px) und an einem echten CC0-Clip geprüft; iPhone-Clips des Nutzers noch nicht |
 | Overlay mit Alpha liegt frame-genau über dem Original | ✅ Frameanzahl/Auflösung/Rate identisch, per Skript zurückgelegt geprüft; VFR wie Resolve (1:1) |
 | Batch-Verarbeitung einer Range-Session | ✅ GUI + CLI, Review, Export bestätigter Schläge |
-| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 113 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
+| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 116 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
 
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -65,7 +66,11 @@ def compute_masks(
 
 
 def tracking_mask_fn(track: MaskTrack | None, proxy_size: tuple[int, int]) -> Callable[[int], np.ndarray | None]:
-    """Per-frame uint8 exclusion mask at proxy resolution (for the camera tracker)."""
+    """Per-frame uint8 exclusion mask at proxy resolution (camera and ball tracker).
+
+    Cached: the ball tracker asks for the same frames again and again (~5 ms each).
+    """
+    @functools.lru_cache(maxsize=64)
     def fn(frame: int) -> np.ndarray | None:
         return tracking_exclusion(track.get(frame, proxy_size)) if track else None
     return fn

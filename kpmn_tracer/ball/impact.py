@@ -9,6 +9,10 @@ tracer starts there.
   template of the resting ball is compared with the same spot in every frame
   (normalised cross-correlation, small search radius, ROI follows slow camera
   drift). A present -> absent transition that stays absent is an impact.
+  Long clips with sound skip this frame-by-frame scan.
+* Ball gone at a sound: around every audio transient four frames show whether
+  a resting ball left the hitting zone (anywhere around the clicked ball - the
+  tee spot changes during a session). This also gives each shot its own start.
 * Fusion: audio and video events within ``match_window_s`` are merged (audio
   frame wins, it is sample-accurate). Audio-only events are dropped when the
   video clearly saw the ball resting there before *and* after (a hit from the
@@ -43,6 +47,8 @@ class ImpactParams:
     min_absent_s: float = 1.0  # a hit ball leaves the spot empty until the next ball is teed
     match_window_s: float = 0.25
     search_px: int = 3  # template search radius around the expected position
+    zone_frac: float = 0.08  # hitting zone around the hint (fraction of the long image side)
+    full_scan_max_s: float = 120.0  # longer clips with sound: no frame-by-frame scan (see D43)
 
 
 @dataclass
@@ -224,6 +230,121 @@ def video_impacts(ncc: np.ndarray, fps: float, p: ImpactParams) -> list[int]:
     return out
 
 
+# ---------------------------------------------------------------- ball gone at a sound
+VANISH_BEFORE_S = (-0.3, -0.1)  # top of the backswing / downswing: the ball still rests
+VANISH_AFTER_S = (0.2, 0.3)  # follow-through: the club is high, the spot is empty
+
+
+def vanished_ball(
+    read, frame: int, n: int, zone_xy: tuple[float, float], zone_r: float, fps: float,
+    ball_r: float | None = None,
+) -> tuple[float, float, float] | None:
+    """Did a resting ball disappear from the hitting zone around ``frame``? -> (x, y, r).
+
+    Four frames suffice: two before the sound, two after. A hit ball leaves a spot
+    that is unchanged within each pair but differs between them (golfer and club
+    move within the pairs), was a bright compact blob before (top-hat) and is not
+    any more. This works wherever in the zone the ball was teed - a session rarely
+    uses one exact spot - and needs no scan of the whole clip. With the clicked
+    ball's size most shoe tips and fingers leaving the spot are rejected (colour
+    is no help: it drifts with the light over a session).
+    """
+    fs = [frame + int(round(t * fps)) for t in (*VANISH_BEFORE_S, *VANISH_AFTER_S)]
+    if fs[0] < 0 or fs[-1] >= n:
+        return None
+    img0 = read(fs[0])
+    h, w = img0.shape[:2]
+    x0, y0 = int(max(0, zone_xy[0] - zone_r)), int(max(0, zone_xy[1] - zone_r))
+    x1, y1 = int(min(w, zone_xy[0] + zone_r)), int(min(h, zone_xy[1] + zone_r))
+    if x1 - x0 < 8 or y1 - y0 < 8:
+        return None
+
+    def crop(img: np.ndarray) -> np.ndarray:
+        return cv2.GaussianBlur(img[y0:y1, x0:x1], (3, 3), 0).astype(np.int16)
+
+    b1, b2, a1, a2 = crop(img0), *(crop(read(f)) for f in fs[1:])
+
+    def d(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        return np.abs(a - b).max(axis=2) if a.ndim == 3 else np.abs(a - b)
+
+    change = np.minimum.reduce([d(b1, a1), d(b2, a2), d(b1, a2), d(b2, a1)])
+    unstable = np.maximum(d(b1, b2), d(a1, a2))
+    mask = ((change >= 25) & (unstable < 0.5 * change)).astype(np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    count, lab, stats, cent = cv2.connectedComponentsWithStats(mask)
+    r_lo, r_hi = (0.75 * ball_r, 1.6 * ball_r) if ball_r else (0.002 * max(h, w), 0.03 * max(h, w))
+    best, best_score = None, 0.0
+    for i in range(1, count):
+        area = stats[i, cv2.CC_STAT_AREA]
+        bw, bh = stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
+        r = float(np.sqrt(area / np.pi))
+        if not r_lo <= r <= r_hi or min(bw, bh) < 0.5 * max(bw, bh) or area < 0.5 * bw * bh:
+            continue
+        cx, cy = cent[i][0] + x0, cent[i][1] + y0
+        # it must have been a ball: a bright blob before, gone after (a club head or a hand
+        # entering or leaving the spot is no bright compact blob)
+        before = min(_blob_peak(c, cx - x0, cy - y0, r) for c in (b1, b2))
+        after = max(_blob_peak(c, cx - x0, cy - y0, r) for c in (a1, a2))
+        if before < 25 or after > 0.7 * before:
+            continue
+        score = before * area / (1.0 + np.hypot(cx - zone_xy[0], cy - zone_xy[1]) / zone_r)
+        if score > best_score:
+            best, best_score = (float(cx), float(cy), r), score
+    return best
+
+
+def _blob_peak(img: np.ndarray, x: float, y: float, r: float) -> float:
+    """Top-hat peak of a ball-sized blob at (x, y) of a crop."""
+    k = int(2 * np.ceil(2.5 * r) + 1)
+    pad = k
+    xi, yi = int(round(x)), int(round(y))
+    win = img[max(0, yi - pad):yi + pad + 1, max(0, xi - pad):xi + pad + 1]
+    if win.size == 0:
+        return 0.0
+    th = ball_tophat(np.clip(win, 0, 255).astype(np.uint8), k)
+    oy, ox = yi - max(0, yi - pad), xi - max(0, xi - pad)
+    q = int(np.ceil(0.7 * r)) + 1
+    return float(th[max(0, oy - q):oy + q + 1, max(0, ox - q):ox + q + 1].max())
+
+
+def vanished_at_sounds(
+    path, frames: list[int], n: int, zone_xy: tuple[float, float], zone_r: float, fps: float,
+    ball_r: float | None, progress: ProgressFn | None = None, cancel: CancelFn | None = None,
+) -> dict[int, tuple[float, float, float]]:
+    """:func:`vanished_ball` for every sound frame, with several readers in threads."""
+    import os
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    local = threading.local()
+    readers: list[FrameReader] = []
+    lock = threading.Lock()
+    done = [0]
+
+    def one(f: int) -> tuple[int, tuple[float, float, float] | None]:
+        if cancel is not None and cancel():
+            raise CancelledError("impact detection cancelled")
+        rd = getattr(local, "reader", None)
+        if rd is None:
+            rd = local.reader = FrameReader(path, cache_size=4)
+            with lock:
+                readers.append(rd)
+        res = vanished_ball(rd.read, f, n, zone_xy, zone_r, fps, ball_r)
+        with lock:
+            done[0] += 1
+            if progress is not None:
+                progress(done[0] / max(1, len(frames)))
+        return f, res
+
+    try:
+        with ThreadPoolExecutor(max(1, min(6, (os.cpu_count() or 2) - 2))) as ex:
+            out = dict(ex.map(one, frames))
+    finally:
+        for rd in readers:
+            rd.close()
+    return {f: v for f, v in out.items() if v is not None}
+
+
 # ---------------------------------------------------------------- launch check
 def launch_seen(reader: FrameReader, frame: int, ball_xy: tuple[float, float], ball_r: float,
                 fps: float) -> int | None:
@@ -314,29 +435,42 @@ def detect_impacts(
     # --- video
     vid: list[int] = []
     launched: dict[int, int] = {}  # video impact -> impact frame confirmed by a take-off
+    vanished: dict[int, tuple[float, float, float]] = {}  # sound frame -> ball (proxy px) that left
     ncc = None
     ball_src = None
+    n = len(session.reader)
     if ball_hint is not None:
         hf = hint_frame if hint_frame is not None else 0
         hint_proxy = session.source_to_proxy(np.array([ball_hint]))[0]
         with FrameReader(session.reader.path, cache_size=4) as reader:
             g = reader.read(hf)
+            zone_r = p.zone_frac * max(g.shape[:2])
             loc = locate_ball(g, (float(hint_proxy[0]), float(hint_proxy[1])),
                               search_r=max(12.0, 0.02 * max(g.shape)))
+            br = p.ball_radius or (loc[2] if loc is not None else None)
+            zone = (float(hint_proxy[0]), float(hint_proxy[1])) if loc is None else (loc[0], loc[1])
+            # every sound: did a ball leave the hitting zone? (a few frames per sound)
+            if audio:
+                vanished = vanished_at_sounds(reader.path, [fa for fa, _t, _s in audio], n, zone, zone_r, fps,
+                                              br, lambda f: report(0.1 + 0.2 * f), cancel)
+            full_scan = not audio or n <= p.full_scan_max_s * fps
             if loc is None:
-                log.warning("No ball found near the hint - video detection skipped")
-            else:
+                log.warning("No ball found near the hint - frame-by-frame video detection skipped")
+            elif full_scan:
+                # short clips (or no sound): also scan every frame at the clicked spot, which
+                # finds silent shots and recognises hits from the next bay with our ball resting
                 bx, by, br = loc
                 br = p.ball_radius or br
                 ball_src = tuple(session.proxy_to_source(np.array([[bx, by]]))[0])
                 ncc, centres = presence_signal(reader, (bx, by), br, hf, p,
-                                               lambda f: report(0.1 + 0.8 * f), cancel)
+                                               lambda f: report(0.3 + 0.6 * f), cancel)
                 vid = video_impacts(ncc, fps, p)
-                launched = {}
                 for v in vid:
                     f0 = launch_seen(reader, v, tuple(centres[v]), br, fps)
                     if f0 is not None:
                         launched[v] = f0
+            else:
+                log.info("Long clip (%.0f s): impacts from sounds only, no frame-by-frame scan", n / fps)
     report(0.95)
 
     # --- fusion
@@ -351,6 +485,10 @@ def detect_impacts(
             d, i = min(close)
             if i not in pair or abs(pair[i] - audio[i][0]) > d:
                 pair[i] = v
+
+    def src_of(ball: tuple[float, float, float]) -> tuple[float, float]:
+        return tuple(session.proxy_to_source(np.array([[ball[0], ball[1]]]))[0])
+
     for i, (fa, t, strength) in enumerate(audio):
         if i in pair:
             v = pair[i]
@@ -358,15 +496,21 @@ def detect_impacts(
             # audio is sample accurate; trust video only if they disagree by > 2 frames
             frame = fa if abs(v - fa) <= 2 else v
             src = ["audio", "video"] + (["launch"] if v in launched else [])
-            out.append(ImpactCandidate(frame, float(times[frame]), min(1.0, 0.6 + 0.4 * strength),
-                                       src, ball_src))
+            pos = src_of(vanished[fa]) if fa in vanished else ball_src
+            out.append(ImpactCandidate(frame, float(times[frame]), min(1.0, 0.6 + 0.4 * strength), src, pos))
+        elif fa in vanished:
+            # a ball left the hitting zone at the sound (wherever it was teed)
+            out.append(ImpactCandidate(fa, t, min(1.0, 0.6 + 0.4 * strength), ["audio", "video"],
+                                       src_of(vanished[fa])))
         elif ncc is not None and _ball_stays(ncc, fa, win, p):
             log.info("Audio transient at %.2fs ignored: ball did not move", t)
-        elif ncc is not None and _spot_empty(ncc, fa, win, p):
-            # no ball at the usual spot: maybe another bay, maybe a different tee spot
+        elif ncc is not None and not _spot_empty(ncc, fa, win, p):
+            out.append(ImpactCandidate(fa, t, 0.25 + 0.35 * strength, ["audio"], ball_src))
+        elif ball_hint is not None:
+            # no ball left the zone: maybe another bay
             out.append(ImpactCandidate(fa, t, 0.15, ["audio"], None))
         else:
-            out.append(ImpactCandidate(fa, t, 0.25 + 0.35 * strength, ["audio"], ball_src))
+            out.append(ImpactCandidate(fa, t, 0.25 + 0.35 * strength, ["audio"], None))
     for v in vid:
         if v not in used_video:
             # without sound only a visible take-off makes a reliable impact

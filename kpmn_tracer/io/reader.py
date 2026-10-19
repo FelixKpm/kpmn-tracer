@@ -12,6 +12,8 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
+SKIP_BY_GRAB = 8  # forward gaps up to this many frames are read through instead of seeking
+
 
 class FrameReader:
     """Frame-exact reader. Every MJPEG frame is a keyframe, so seeks are exact and cheap.
@@ -45,7 +47,11 @@ class FrameReader:
             if hit is not None:
                 self._cache.move_to_end(index)
                 return hit
-            if index != self._next:
+            if 0 < index - self._next <= SKIP_BY_GRAB:
+                # a seek costs ~10 decoded frames (FFmpeg backend); stepping forward is cheaper
+                for _ in range(index - self._next):
+                    self._cap.grab()
+            elif index != self._next:
                 self._cap.set(cv2.CAP_PROP_POS_FRAMES, index)
             ok, frame = self._cap.read()
             if not ok:
