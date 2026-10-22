@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from kpmn_tracer.i18n import tr
 from kpmn_tracer.render.style import TracerStyle
 from kpmn_tracer.trace.model import AnchorKind, Shot
 
@@ -71,7 +72,7 @@ class ColorButton(QPushButton):
 
     def _refresh(self) -> None:
         if self._color is None:
-            self.setText("wie Linie")
+            self.setText(tr("wie Linie"))
             self.setStyleSheet("")
         else:
             self.setText(self._color)
@@ -79,7 +80,7 @@ class ColorButton(QPushButton):
             self.setStyleSheet(f"background:{self._color}; color:{fg};")
 
     def _pick(self) -> None:
-        c = QColorDialog.getColor(QColor(self._color or "#ffffff"), self, "Farbe wählen")
+        c = QColorDialog.getColor(QColor(self._color or "#ffffff"), self, tr("Farbe wählen"))
         if c.isValid():
             self.set_color(c.name())
             self.colorChanged.emit(c.name())
@@ -92,7 +93,7 @@ class StylePanel(QGroupBox):
     presetDelete = Signal()
 
     def __init__(self) -> None:
-        super().__init__("Tracer-Style")
+        super().__init__(tr("Tracer-Style"))
         self.style_obj = TracerStyle()
         f = QFormLayout(self)
         self._setters: list[Callable[[], None]] = []
@@ -100,26 +101,26 @@ class StylePanel(QGroupBox):
 
         prow = QGridLayout()
         self.presets = QComboBox()
-        self.presets.setToolTip("Gespeicherte Styles")
-        self.presets.activated.connect(lambda _i: self.presetChosen.emit(self.presets.currentText()))
-        save = QPushButton("Speichern…")
-        save.setToolTip("Aktuellen Style als Preset speichern")
+        self.presets.setToolTip(tr("Gespeicherte Styles"))
+        self.presets.activated.connect(lambda _i: self.presetChosen.emit(self.presets.currentData()))
+        save = QPushButton(tr("Speichern…"))
+        save.setToolTip(tr("Aktuellen Style als Preset speichern"))
         save.clicked.connect(self.presetSave.emit)
-        delete = QPushButton("Löschen")
-        delete.setToolTip("Eigenes Preset löschen")
+        delete = QPushButton(tr("Löschen"))
+        delete.setToolTip(tr("Eigenes Preset löschen"))
         delete.clicked.connect(self.presetDelete.emit)
         prow.addWidget(self.presets, 0, 0, 1, 2)
         prow.addWidget(save, 1, 0)
         prow.addWidget(delete, 1, 1)
-        f.addRow("Preset", prow)
+        f.addRow(tr("Preset"), prow)
 
         self.color = ColorButton()
         self.color.colorChanged.connect(lambda c: self._set("color", c))
-        f.addRow("Farbe", self.color)
+        f.addRow(tr("Farbe"), self.color)
         self.glow_color = ColorButton(allow_none=True)
         self.glow_color.set_color(None)
         self.glow_color.colorChanged.connect(lambda c: self._set("glow_color", c))
-        f.addRow("Glow-Farbe", self.glow_color)
+        f.addRow(tr("Glow-Farbe"), self.glow_color)
 
         self._spin(f, "Dicke", "width", 0.5, 60, 0.5, 1, " px")
         self._spin(f, "Verjüngung", "taper", 0, 1, 0.05)
@@ -130,10 +131,10 @@ class StylePanel(QGroupBox):
         self._check(f, "Schatten", "shadow")
         self._spin(f, "Schatten-Deckkraft", "shadow_opacity", 0, 1, 0.05)
         self.mode = QComboBox()
-        self.mode.addItem("Voller Pfad bleibt stehen", "full")
-        self.mode.addItem("Kurzer Schweif", "tail")
+        self.mode.addItem(tr("Voller Pfad bleibt stehen"), "full")
+        self.mode.addItem(tr("Kurzer Schweif"), "tail")
         self.mode.currentIndexChanged.connect(lambda _i: self._set("mode", self.mode.currentData()))
-        f.addRow("Modus", self.mode)
+        f.addRow(tr("Modus"), self.mode)
         self._spin(f, "Schweif-Länge", "tail_seconds", 0.05, 5, 0.05, 2, " s")
         self._check(f, "Ball-Punkt am Kopf", "head_dot")
         self._spin(f, "Stehen nach Landung", "hold_seconds", 0, 20, 0.1, 1, " s")
@@ -144,13 +145,13 @@ class StylePanel(QGroupBox):
         w = dspin(lo, hi, step, dec, suffix)
         w.valueChanged.connect(lambda v, a=attr: self._set(a, float(v)))
         self._setters.append(lambda w=w, a=attr: w.setValue(getattr(self.style_obj, a)))
-        form.addRow(label, w)
+        form.addRow(tr(label), w)
 
     def _check(self, form: QFormLayout, label: str, attr: str) -> None:
         w = QCheckBox()
         w.toggled.connect(lambda v, a=attr: self._set(a, bool(v)))
         self._setters.append(lambda w=w, a=attr: w.setChecked(getattr(self.style_obj, a)))
-        form.addRow(label, w)
+        form.addRow(tr(label), w)
 
     def _set(self, attr: str, value: Any) -> None:
         if self._building:
@@ -161,9 +162,10 @@ class StylePanel(QGroupBox):
     def set_presets(self, names: list[str], current: str | None = None) -> None:
         self.presets.blockSignals(True)
         self.presets.clear()
-        self.presets.addItems(names)
+        for n in names:  # built-in names are shown translated, the data stays the preset name
+            self.presets.addItem(tr(n), n)
         if current and current in names:
-            self.presets.setCurrentText(current)
+            self.presets.setCurrentIndex(names.index(current))
         self.presets.blockSignals(False)
 
     def set_style(self, style: TracerStyle) -> None:
@@ -185,35 +187,35 @@ class TextPanel(QGroupBox):
     changed = Signal()
 
     def __init__(self) -> None:
-        super().__init__("Text-Einblendung")
+        super().__init__(tr("Text-Einblendung"))
         from kpmn_tracer.render.text import TextStyle
 
         self.text_style = TextStyle()
         f = QFormLayout(self)
         self.text = QLineEdit()
-        self.text.setPlaceholderText("z. B. 7-Eisen · 145 m  (leer = kein Text)")
+        self.text.setPlaceholderText(tr("z. B. 7-Eisen · 145 m  (leer = kein Text)"))
         self.text.editingFinished.connect(self._emit)
         self.position = QComboBox()
         for k, label in (("apex", "Am Apex"), ("land", "Am Landepunkt"), ("top_left", "Oben links"),
                          ("top_right", "Oben rechts"), ("bottom_left", "Unten links"),
                          ("bottom_right", "Unten rechts")):
-            self.position.addItem(label, k)
+            self.position.addItem(tr(label), k)
         self.trigger = QComboBox()
-        self.trigger.addItem("nach dem Impact", "impact")
-        self.trigger.addItem("nach der Landung", "land")
+        self.trigger.addItem(tr("nach dem Impact"), "impact")
+        self.trigger.addItem(tr("nach der Landung"), "land")
         self.delay = dspin(0, 10, 0.1, 1, " s")
         self.size = dspin(10, 200, 2, 0, " px")
-        self.box = QCheckBox("Hintergrund-Box")
+        self.box = QCheckBox(tr("Hintergrund-Box"))
         for w in (self.position, self.trigger):
             w.currentIndexChanged.connect(lambda _i: self._emit())
         for w in (self.delay, self.size):
             w.valueChanged.connect(lambda _v: self._emit())
         self.box.toggled.connect(lambda _v: self._emit())
-        f.addRow("Text (Schlag)", self.text)
-        f.addRow("Position", self.position)
-        f.addRow("Erscheint", self.trigger)
-        f.addRow("Verzögerung", self.delay)
-        f.addRow("Schriftgröße", self.size)
+        f.addRow(tr("Text (Schlag)"), self.text)
+        f.addRow(tr("Position"), self.position)
+        f.addRow(tr("Erscheint"), self.trigger)
+        f.addRow(tr("Verzögerung"), self.delay)
+        f.addRow(tr("Schriftgröße"), self.size)
         f.addRow(self.box)
         self._building = False
 
@@ -268,7 +270,7 @@ class ShotPanel(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        box = QGroupBox("Schläge")
+        box = QGroupBox(tr("Schläge"))
         bl = QVBoxLayout(box)
         self.list = QListWidget()
         self.list.setMaximumHeight(130)
@@ -283,22 +285,22 @@ class ShotPanel(QWidget):
             ("→ Impact", self.jumpImpact, "Zum Impact-Frame springen (Pos1)"),
             ("Korrekturen löschen", self.clearOffsets, "Alle Korrektur-Keyframes dieses Schlags entfernen"),
         )):
-            b = QPushButton(text)
-            b.setToolTip(tip)
+            b = QPushButton(tr(text))
+            b.setToolTip(tr(tip))
             b.clicked.connect(sig.emit)
             row.addWidget(b, i // 2, i % 2)
         bl.addLayout(row)
         lay.addWidget(box)
         self.shots_box = box
 
-        tbox = QGroupBox("Werkzeug")
+        tbox = QGroupBox(tr("Werkzeug"))
         tl = QGridLayout(tbox)
         self.tool_group = QButtonGroup(self)
         self.tool_buttons: dict[str, QToolButton] = {}
         for i, (key, text, sc, tip) in enumerate(TOOLS):
             b = QToolButton()
-            b.setText(f"{text} ({sc})")
-            b.setToolTip(tip)
+            b.setText(f"{tr(text)} ({sc})")
+            b.setToolTip(tr(tip))
             b.setCheckable(True)
             b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
             b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -314,7 +316,7 @@ class ShotPanel(QWidget):
         lay.addWidget(tbox)
         self.tool_box = tbox
 
-        abox = QGroupBox("Automatik")
+        abox = QGroupBox(tr("Automatik"))
         al = QGridLayout(abox)
         for i, (text, sig, tip) in enumerate((
             ("Impacts erkennen (D)", self.detectImpacts,
@@ -328,26 +330,27 @@ class ShotPanel(QWidget):
             ("Vereinfachen", self.simplify,
              "Auto-Ergebnis auf Start/Apex/Landung reduzieren (bequemer von Hand nachzubessern)"),
         )):
-            b = QPushButton(text)
-            b.setToolTip(tip)
+            b = QPushButton(tr(text))
+            b.setToolTip(tr(tip))
             b.clicked.connect(sig.emit)
             al.addWidget(b, i // 2, i % 2)
-        self.auto_status = QLabel("Tipp: zuerst den Ball mit „Start“ markieren – dann wird auch das Video ausgewertet.")
+        self.auto_status = QLabel(
+            tr("Tipp: zuerst den Ball mit „Start“ markieren – dann wird auch das Video ausgewertet."))
         self.auto_status.setWordWrap(True)
         self.auto_status.setStyleSheet("color:#aaa;")
         al.addWidget(self.auto_status, 3, 0, 1, 2)
         lay.addWidget(abox)
         self.auto_box = abox
 
-        cbox = QGroupBox("Kamera")
+        cbox = QGroupBox(tr("Kamera"))
         cl = QGridLayout(cbox)
-        self.cam_btn = QPushButton("Kamera tracken (T)")
-        self.cam_btn.setToolTip("Kamerabewegung um diesen Schlag analysieren (Stativ wird automatisch erkannt)")
+        self.cam_btn = QPushButton(tr("Kamera tracken (T)"))
+        self.cam_btn.setToolTip(tr("Kamerabewegung um diesen Schlag analysieren (Stativ wird automatisch erkannt)"))
         self.cam_btn.clicked.connect(lambda: self.trackCamera.emit(False))
-        self.cam_force = QPushButton("Erzwingen")
-        self.cam_force.setToolTip("Tracking auch dann durchführen, wenn ein Stativ erkannt würde")
+        self.cam_force = QPushButton(tr("Erzwingen"))
+        self.cam_force.setToolTip(tr("Tracking auch dann durchführen, wenn ein Stativ erkannt würde"))
         self.cam_force.clicked.connect(lambda: self.trackCamera.emit(True))
-        self.cam_status = QLabel("nicht analysiert (Stativ angenommen)")
+        self.cam_status = QLabel(tr("nicht analysiert (Stativ angenommen)"))
         self.cam_status.setWordWrap(True)
         self.cam_status.setStyleSheet("color:#aaa;")
         cl.addWidget(self.cam_btn, 0, 0)
@@ -356,26 +359,26 @@ class ShotPanel(QWidget):
         lay.addWidget(cbox)
         self.cam_box = cbox
 
-        pbox = QGroupBox("Flugkurve")
+        pbox = QGroupBox(tr("Flugkurve"))
         pf = QFormLayout(pbox)
         self.duration = dspin(0.2, 15, 0.1, 2, " s")
-        self.duration.setToolTip("Flugzeit Impact → Landung (bestimmt den Lande-Frame)")
+        self.duration.setToolTip(tr("Flugzeit Impact → Landung (bestimmt den Lande-Frame)"))
         self.launch = dspin(0, 0.95, 0.05)
-        self.launch.setToolTip("Wie steil der Ball startet (0 = gerade Linie zum Apex)")
+        self.launch.setToolTip(tr("Wie steil der Ball startet (0 = gerade Linie zum Apex)"))
         self.descent = dspin(0, 0.95, 0.05)
-        self.descent.setToolTip("Wie steil der Ball fällt")
+        self.descent.setToolTip(tr("Wie steil der Ball fällt"))
         self.boost = dspin(0, 100, 0.5)
-        self.boost.setToolTip("Tempo direkt nach dem Impact (Easing)")
+        self.boost.setToolTip(tr("Tempo direkt nach dem Impact (Easing)"))
         self.decay = dspin(0.005, 1, 0.005, 3)
-        self.decay.setToolTip("Wie schnell der Ball nach dem Abflug abbremst")
+        self.decay.setToolTip(tr("Wie schnell der Ball nach dem Abflug abbremst"))
         self.late = dspin(0, 5, 0.1)
-        self.late.setToolTip("Beschleunigung auf dem Weg nach unten")
-        self.occlude = QCheckBox("Tracer hinter Golfer")
-        self.occlude.setToolTip("Tracer dort ausschneiden, wo die Personen-Maske liegt")
+        self.late.setToolTip(tr("Beschleunigung auf dem Weg nach unten"))
+        self.occlude = QCheckBox(tr("Tracer hinter Golfer"))
+        self.occlude.setToolTip(tr("Tracer dort ausschneiden, wo die Personen-Maske liegt"))
         for label, w in (("Flugzeit", self.duration), ("Start-Steilheit", self.launch),
                          ("Abstiegs-Steilheit", self.descent), ("Start-Tempo", self.boost),
                          ("Abbremsen", self.decay), ("Spätes Tempo", self.late)):
-            pf.addRow(label, w)
+            pf.addRow(tr(label), w)
             w.valueChanged.connect(lambda _v: self._emit_params())
         pf.addRow(self.occlude)
         self.occlude.toggled.connect(lambda _v: self._emit_params())
@@ -397,7 +400,8 @@ class ShotPanel(QWidget):
             conf = f", {s.confidence:.0%}" if s.confidence is not None else ""
             mark = "✔ " if s.confirmed else ""
             t = s.impact_frame / fps if fps else 0
-            item = QListWidgetItem(f"{mark}Schlag {i + 1} – Frame {s.impact_frame} ({t:.2f}s, {s.source}{conf})")
+            item = QListWidgetItem(mark + tr("Schlag {i} – Frame {frame} ({t:.2f}s, {src}{conf})", i=i + 1,
+                                               frame=s.impact_frame, t=t, src=s.source, conf=conf))
             if not s.is_complete():
                 item.setForeground(QColor(230, 160, 60))
             self.list.addItem(item)
@@ -418,19 +422,19 @@ class ShotPanel(QWidget):
             if cam.mode == "tracked":
                 bad = sum(c < 0.5 for c in cam.confidence)
                 self.cam_status.setText(
-                    f"Handheld: Frames {cam.first_frame}–{cam.first_frame + len(cam.homographies) - 1} "
-                    f"getrackt, {bad} unsicher (rot in der Timeline)")
+                    tr("Handheld: Frames {a}–{b} getrackt, {bad} unsicher (rot in der Timeline)",
+                       a=cam.first_frame, b=cam.first_frame + len(cam.homographies) - 1, bad=bad))
             elif cam.analyzed:
-                self.cam_status.setText("Stativ erkannt – keine Kompensation nötig")
+                self.cam_status.setText(tr("Stativ erkannt – keine Kompensation nötig"))
             else:
-                self.cam_status.setText("nicht analysiert (Stativ angenommen)")
+                self.cam_status.setText(tr("nicht analysiert (Stativ angenommen)"))
             self.duration.setValue(shot.flight_frames(fps) / fps)
             land = shot.anchor(AnchorKind.LAND)
             self.duration.setEnabled(land is None or land.t is None)
             pinned = sum(1 for a in shot.anchors if a.t is not None and a.kind == AnchorKind.POINT)
             for w in (self.boost, self.decay, self.late):
                 w.setEnabled(pinned == 0)
-                w.setToolTip(w.toolTip().split(" (")[0] + (" (inaktiv: Timing folgt den „Ball hier“-Punkten)"
+                w.setToolTip(w.toolTip().split(" (")[0] + (tr(" (inaktiv: Timing folgt den „Ball hier“-Punkten)")
                                                           if pinned else ""))
             self.launch.setValue(shot.shape.launch_steepness)
             self.descent.setValue(shot.shape.descent_steepness)

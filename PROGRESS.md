@@ -174,13 +174,21 @@ daneben; gewünscht: Frame mit Tracer als Bild, Scorecard-Generator mit austausc
 - Neue Tests: verschwundener Ball an wechselnder Tee-Position vs. Schlägerkopf, GPU- gegen CPU-Proxy
   (frame-genau, Drehung, HDR).
 
+## Nachtrag 7 – Englische Oberfläche (v0.4.0)
+- App und Scorecard Studio komplett auf Englisch; Sprachabfrage als erster Schritt der Einführungstour,
+  Umschalten auch unter *Einstellungen* – das Fenster wird neu aufgebaut, offener Clip, Änderungen und
+  Rückgängig-Verlauf bleiben erhalten (D44).
+- Neue Tests: jede deutsche Oberflächen-Zeichenkette hat eine Übersetzung mit denselben Platzhaltern,
+  das englische Fenster (inkl. Dialoge) zeigt kein Deutsch, Sprachwechsel aus der Tour und mit offenem
+  Clip, Studio-Übersetzung vollständig.
+
 ## Definition of Done – Abgleich
 | Kriterium | Stand |
 |---|---|
 | Stativ- und Handheld-Clip importieren, Ball automatisch getrackt oder mit wenigen Klicks korrigiert | ✅ synthetisch (≤ 0,5 px) und an einem echten CC0-Clip geprüft; iPhone-Clips des Nutzers noch nicht |
 | Overlay mit Alpha liegt frame-genau über dem Original | ✅ Frameanzahl/Auflösung/Rate identisch, per Skript zurückgelegt geprüft; VFR wie Resolve (1:1) |
 | Batch-Verarbeitung einer Range-Session | ✅ GUI + CLI, Review, Export bestätigter Schläge |
-| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 116 Tests (inkl. HDR-HLG-Hochformat), ruff sauber |
+| Alle Tests grün, PROGRESS zeigt alle Phasen erledigt, README erklärt die Nutzung | ✅ 123 Tests (inkl. HDR-HLG-Hochformat, Deutsch/Englisch), ruff sauber |
 
 ## Bekannte Punkte / offen
 - HDR-Tonemapping (hable) ist nur für die Analyse/Vorschau gedacht; eingebrannte Exporte sind SDR.

@@ -1,7 +1,7 @@
 """Guided tour through the main window (shown once on first start, again via Hilfe).
 
 An overlay dims the window except for the area being explained and shows a
-speech bubble next to it. Steps name their target lazily (a callable returning
+speech bubble next to it. The first step asks for the UI language. Steps name their target lazily (a callable returning
 widgets), so the tour adapts to the actual layout; targets inside the scrolled
 side panel are scrolled into view first.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QKeyEvent, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QFrame,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from kpmn_tracer.gui.keys import native
+from kpmn_tracer.i18n import LANGUAGES, language, tr
 
 ACCENT = QColor(255, 200, 40)  # tracer yellow, also used for the impact markers
 DIM = QColor(0, 0, 0, 165)
@@ -34,12 +35,14 @@ class TourStep:
     title: str
     text: str  # rich text
     targets: Callable[[], Sequence[QWidget]] | None = None  # None: centred, nothing highlighted
+    choices: dict[str, str] | None = None  # buttons instead of "Weiter" (key -> label), see TourOverlay.chosen
 
 
 class TourOverlay(QWidget):
     """Dimmed overlay with a highlighted rectangle and an explanation bubble."""
 
     finished = Signal(bool)  # True: went through to the end, False: skipped
+    chosen = Signal(str)  # key of a choice button (the window decides how the tour goes on)
 
     def __init__(self, window: QWidget, steps: list[TourStep], scroll: QScrollArea | None = None) -> None:
         super().__init__(window)
@@ -69,12 +72,15 @@ class TourOverlay(QWidget):
         self.text.setMinimumWidth(360)
         bl.addWidget(self.title)
         bl.addWidget(self.text)
+        self.choice_row = QHBoxLayout()
+        bl.addLayout(self.choice_row)
+        self.choice_btns: list[QPushButton] = []
         row = QHBoxLayout()
         self.count = QLabel()
         self.count.setObjectName("tourCount")
-        self.skip_btn = QPushButton("Tour beenden")
-        self.back_btn = QPushButton("Zurück")
-        self.next_btn = QPushButton("Weiter")
+        self.skip_btn = QPushButton(tr("Tour beenden"))
+        self.back_btn = QPushButton(tr("Zurück"))
+        self.next_btn = QPushButton(tr("Weiter"))
         self.next_btn.setDefault(True)
         row.addWidget(self.count)
         row.addStretch(1)
@@ -89,14 +95,17 @@ class TourOverlay(QWidget):
         window.installEventFilter(self)
 
     # ------------------------------------------------------------ control
-    def start(self) -> None:
+    def start(self, index: int = 0) -> None:
         self.setGeometry(self.window_.rect())
         self.show()
         self.raise_()
         self.setFocus()
-        self.show_step(0)
+        self.show_step(index)
+        QTimer.singleShot(0, self._layout_step)  # once more when the new widgets are laid out
 
     def next(self) -> None:
+        if self.steps[self.index].choices:
+            return  # answered with a choice button
         if self.index >= len(self.steps) - 1:
             self.finish(True)
         else:
@@ -111,12 +120,23 @@ class TourOverlay(QWidget):
     def show_step(self, i: int) -> None:
         self.index = max(0, min(i, len(self.steps) - 1))
         st = self.steps[self.index]
-        self.title.setText(st.title)
-        self.text.setText(native(st.text))
+        self.title.setText(tr(st.title))
+        self.text.setText(native(tr(st.text)))
         n = len(self.steps)
         self.count.setText(f"{self.index + 1} / {n}")
         self.back_btn.setEnabled(self.index > 0)
-        self.next_btn.setText("Los geht's" if self.index == n - 1 else "Weiter")
+        self.next_btn.setText(tr("Los geht's") if self.index == n - 1 else tr("Weiter"))
+        self.next_btn.setVisible(not st.choices)
+        for b in self.choice_btns:
+            b.deleteLater()
+        self.choice_btns = []
+        for key, label in (st.choices or {}).items():
+            b = QPushButton(label)
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            b.setMinimumHeight(34)
+            b.clicked.connect(lambda _c=False, k=key: self.chosen.emit(k))
+            self.choice_row.addWidget(b)
+            self.choice_btns.append(b)
         self._layout_step()
 
     # ------------------------------------------------------------ geometry
@@ -139,7 +159,11 @@ class TourOverlay(QWidget):
         self.setGeometry(self.window_.rect())
         self.hole = self._target_rect()
         self.bubble.setMaximumWidth(min(460, self.width() - 32))
-        self.bubble.adjustSize()
+        # explicit size: adjustSize does not always account for how high the wrapped text gets
+        lay = self.bubble.layout()
+        lay.activate()
+        bw = min(max(lay.sizeHint().width(), self.bubble.minimumSizeHint().width()), self.bubble.maximumWidth())
+        self.bubble.resize(bw, lay.totalHeightForWidth(bw))
         b = self.bubble.size()
         W, H, m = self.width(), self.height(), 16
         if self.hole.isNull():
@@ -202,6 +226,12 @@ def main_window_steps(w) -> list[TourStep]:
     """The tour of :class:`MainWindow` (``w``)."""
     sp = w.shot_panel
     return [
+        TourStep("Sprache · Language",
+                 "Möchtest du KPMN Tracer auf Deutsch oder auf Englisch benutzen?<br>"
+                 "<i>Would you like to use KPMN Tracer in German or in English?</i><br><br>"
+                 "<span style='color:#9a9a9a'>Später änderbar unter <i>Einstellungen</i>. · "
+                 "You can change this later in <i>Settings</i>.</span>",
+                 choices={k: ("▸ " if k == language() else "") + v for k, v in LANGUAGES.items()}),
         TourStep("Willkommen bei KPMN Tracer",
                  "Diese kurze Tour zeigt dir, was wo ist. Der Ablauf ist immer gleich:<br><br>"
                  "<b>1.</b> Clip öffnen &nbsp;→&nbsp; <b>2.</b> Ball markieren &nbsp;→&nbsp; "

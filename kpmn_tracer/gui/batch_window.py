@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from kpmn_tracer.batch import ClipResult, ShotReview, analyze_folder, export_confirmed, set_confirmed
 from kpmn_tracer.gui.workers import TaskRunner
+from kpmn_tracer.i18n import tr
 from kpmn_tracer.project.presets import PresetStore
 
 log = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ class BatchWindow(QDialog):
 
     def __init__(self, parent: QWidget | None = None, options_fn=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Batch – Range-Session")
+        self.setWindowTitle(tr("Batch – Range-Session"))
         self.resize(1100, 760)
         self.tasks = TaskRunner(self)
         self.options_fn = options_fn
@@ -51,25 +52,25 @@ class BatchWindow(QDialog):
         lay = QVBoxLayout(self)
         top = QHBoxLayout()
         self.folder = QLineEdit()
-        self.folder.setPlaceholderText("Ordner mit Clips")
-        browse = QPushButton("Ordner…")
+        self.folder.setPlaceholderText(tr("Ordner mit Clips"))
+        browse = QPushButton(tr("Ordner…"))
         browse.clicked.connect(self.browse)
-        self.run_btn = QPushButton("Analysieren")
+        self.run_btn = QPushButton(tr("Analysieren"))
         self.run_btn.clicked.connect(self.run)
-        self.cancel_btn = QPushButton("Abbrechen")
+        self.cancel_btn = QPushButton(tr("Abbrechen"))
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.clicked.connect(lambda: self._task and self._task.cancel())
-        for w in (QLabel("Ordner:"), self.folder, browse, self.run_btn, self.cancel_btn):
+        for w in (QLabel(tr("Ordner:")), self.folder, browse, self.run_btn, self.cancel_btn):
             top.addWidget(w)
         top.setStretch(1, 1)
         lay.addLayout(top)
 
         opts = QHBoxLayout()
-        self.use_preset = QCheckBox("Ballposition vom letzten Clip verwenden (gleicher Stativ-Standort)")
-        self.use_preset.setToolTip("Nur einschalten, wenn alle Clips vom selben Stativ-Platz aus gefilmt sind.")
+        self.use_preset = QCheckBox(tr("Ballposition vom letzten Clip verwenden (gleicher Stativ-Standort)"))
+        self.use_preset.setToolTip(tr("Nur einschalten, wenn alle Clips vom selben Stativ-Platz aus gefilmt sind."))
         self.use_preset.toggled.connect(self._update_preset_info)
-        self.reanalyze = QCheckBox("Bereits analysierte Clips neu berechnen")
-        self.reanalyze.setToolTip("Unbestätigte Schläge werden verworfen und neu gesucht, bestätigte bleiben.")
+        self.reanalyze = QCheckBox(tr("Bereits analysierte Clips neu berechnen"))
+        self.reanalyze.setToolTip(tr("Unbestätigte Schläge werden verworfen und neu gesucht, bestätigte bleiben."))
         opts.addWidget(self.use_preset)
         opts.addWidget(self.reanalyze)
         opts.addStretch(1)
@@ -93,26 +94,26 @@ class BatchWindow(QDialog):
         lay.addWidget(self.list, 1)
 
         bottom = QHBoxLayout()
-        bottom.addWidget(QLabel("Bestätigen ab"))
+        bottom.addWidget(QLabel(tr("Bestätigen ab")))
         self.threshold = QDoubleSpinBox()
         self.threshold.setRange(0, 1)
         self.threshold.setSingleStep(0.05)
         self.threshold.setValue(0.8)
         bottom.addWidget(self.threshold)
-        conf_btn = QPushButton("Alle darüber bestätigen")
+        conf_btn = QPushButton(tr("Alle darüber bestätigen"))
         conf_btn.clicked.connect(self.confirm_above)
         bottom.addWidget(conf_btn)
         bottom.addStretch(1)
         self.fmt = QComboBox()
         for k, label in (("prores", "ProRes 4444 (Alpha)"), ("png", "PNG-Sequenz"), ("h264", "H.264 eingebrannt"),
                          ("h265", "H.265 eingebrannt")):
-            self.fmt.addItem(label, k)
+            self.fmt.addItem(tr(label), k)
         bottom.addWidget(self.fmt)
-        self.export_btn = QPushButton("Bestätigte exportieren")
+        self.export_btn = QPushButton(tr("Bestätigte exportieren"))
         self.export_btn.clicked.connect(self.export)
         bottom.addWidget(self.export_btn)
         lay.addLayout(bottom)
-        hint = QLabel("Häkchen = Schlag bestätigt. Doppelklick öffnet den Schlag im Editor zum Nachkorrigieren.")
+        hint = QLabel(tr("Häkchen = Schlag bestätigt. Doppelklick öffnet den Schlag im Editor zum Nachkorrigieren."))
         hint.setStyleSheet("color:#aaa;")
         lay.addWidget(hint)
         self._update_preset_info()
@@ -121,17 +122,18 @@ class BatchWindow(QDialog):
     def _update_preset_info(self) -> None:
         pre = PresetStore().load_position()
         if not self.use_preset.isChecked():
-            self.preset_info.setText("Ohne Ballposition werden Impacts nur über den Ton gefunden und nicht "
-                                     "getrackt. Clips mit einem im Editor markierten Ball werden voll analysiert.")
+            self.preset_info.setText(tr("Ohne Ballposition werden Impacts nur über den Ton gefunden und nicht "
+                                        "getrackt. Clips mit einem im Editor markierten Ball werden voll analysiert."))
         elif pre is None:
-            self.preset_info.setText("Noch keine Ballposition gespeichert: einen Schlag im Editor setzen und "
-                                     "speichern – die Ballposition wird gemerkt.")
+            self.preset_info.setText(tr("Noch keine Ballposition gespeichert: einen Schlag im Editor setzen und "
+                                        "speichern – die Ballposition wird gemerkt."))
         else:
-            self.preset_info.setText(f"Ballposition vom letzten Clip: {pre.start[0]:.0%} / {pre.start[1]:.0%} "
-                                     "des Bildes – wird pro Clip geprüft (nur verwendet, wenn dort ein Ball liegt).")
+            self.preset_info.setText(tr("Ballposition vom letzten Clip: {x:.0%} / {y:.0%} des Bildes – wird pro "
+                                        "Clip geprüft (nur verwendet, wenn dort ein Ball liegt).",
+                                        x=pre.start[0], y=pre.start[1]))
 
     def browse(self) -> None:
-        d = QFileDialog.getExistingDirectory(self, "Ordner mit Clips", self.folder.text())
+        d = QFileDialog.getExistingDirectory(self, tr("Ordner mit Clips"), self.folder.text())
         if d:
             self.folder.setText(d)
 
@@ -144,7 +146,7 @@ class BatchWindow(QDialog):
     def run(self) -> None:
         folder = Path(self.folder.text())
         if not folder.is_dir():
-            QMessageBox.information(self, "Batch", "Bitte einen Ordner wählen.")
+            QMessageBox.information(self, "Batch", tr("Bitte einen Ordner wählen."))
             return
         self.list.clear()
         preset = PresetStore().load_position() if self.use_preset.isChecked() else None
@@ -169,19 +171,19 @@ class BatchWindow(QDialog):
         self.list.clear()
         for r in results:
             if r.error:
-                it = QListWidgetItem(f"{Path(r.clip).name}\nFehler: {r.error}")
+                it = QListWidgetItem(tr("{name}\nFehler: {error}", name=Path(r.clip).name, error=r.error))
                 it.setForeground(QColor(230, 90, 90))
                 self.list.addItem(it)
                 continue
             if not r.shots:
-                self.list.addItem(QListWidgetItem(f"{Path(r.clip).name}\nkeine Schläge gefunden"))
+                self.list.addItem(QListWidgetItem(tr("{name}\nkeine Schläge gefunden", name=Path(r.clip).name)))
             for s in r.shots:
                 self.list.addItem(self._item(s))
         self.list.blockSignals(False)
 
     def _item(self, s: ShotReview) -> QListWidgetItem:
-        it = QListWidgetItem(f"{Path(s.clip).name} · Schlag {s.index + 1}\n"
-                             f"{s.time_s:.1f} s · Konfidenz {s.confidence:.0%}")
+        it = QListWidgetItem(tr("{name} · Schlag {i}\n{t:.1f} s · Konfidenz {conf:.0%}", name=Path(s.clip).name,
+                                i=s.index + 1, t=s.time_s, conf=s.confidence))
         if s.thumbnail:
             it.setIcon(QIcon(QPixmap(s.thumbnail)))
         it.setFlags(it.flags() | Qt.ItemFlag.ItemIsUserCheckable)
@@ -228,8 +230,8 @@ class BatchWindow(QDialog):
 
         def done(outs) -> None:
             self._busy(False)
-            QMessageBox.information(self, "Export", f"{len(outs)} Overlays exportiert:\n" +
-                                    "\n".join(str(o) for o in outs) if outs else "Nichts bestätigt.")
+            QMessageBox.information(self, "Export", tr("{n} Overlays exportiert:", n=len(outs)) + "\n" +
+                                    "\n".join(str(o) for o in outs) if outs else tr("Nichts bestätigt."))
 
         task.finished.connect(done)
         task.failed.connect(lambda m: (self._busy(False), QMessageBox.critical(self, "Export", m)))

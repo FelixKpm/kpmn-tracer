@@ -71,9 +71,11 @@ class MediaPipeSegmenter:
                     base_options=opts, running_mode=vision.RunningMode.IMAGE,
                     output_confidence_masks=True, output_category_mask=False))
         except OSError as exc:  # Linux: MediaPipe's native library needs the system's OpenGL ES/EGL
+            from kpmn_tracer.i18n import tr
+
             raise RuntimeError(
-                f"Personen-Maske nicht verfügbar – eine Systembibliothek fehlt ({exc}). "
-                "Ubuntu/Debian: sudo apt install libgles2 libegl1") from exc
+                tr("Personen-Maske nicht verfügbar – eine Systembibliothek fehlt ({exc}). "
+                   "Ubuntu/Debian: sudo apt install libgles2 libegl1", exc=exc)) from exc
 
     def segment(self, bgr: np.ndarray) -> np.ndarray:
         h, w = bgr.shape[:2]

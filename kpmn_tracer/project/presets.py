@@ -79,6 +79,7 @@ class AppDefaults:
     vfr_mode: str = "frames"
     export_format: str = "prores"
     last_style: str = "TV Rot"
+    language: str = ""  # "de" / "en"; empty: not chosen yet (system language, asked in the tour)
     extra: dict[str, Any] = field(default_factory=dict)
 
 

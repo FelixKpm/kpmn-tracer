@@ -38,6 +38,9 @@ body { background: var(--night); color: var(--white); font-family: var(--body); 
 .top h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: 0.01em; text-transform: uppercase; line-height: 1; }
 .top p { margin: 4px 0 0; color: var(--mist); font-size: 14px; }
 .top .dot { color: var(--lime); }
+.top .lang { margin-left: auto; display: flex; gap: 4px; }
+.top .lang .btn { min-height: 36px; padding: 0 10px; font-size: 13px; }
+.top .lang .btn.on { border-color: var(--lime); color: var(--lime); }
 
 .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
 .preview { order: -1; }
@@ -141,6 +144,9 @@ table.holes[data-mode="match"] .c-len { display: none; }
       <h1>Scorecard<span class="dot">.</span>Studio</h1>
       <p>Runde oder Turnier eintragen, Design und Format wählen, als PNG speichern.</p>
     </div>
+    <div class="lang" role="group" aria-label="Sprache / Language">
+      <button type="button" class="btn" data-lang="de">DE</button><button type="button" class="btn" data-lang="en">EN</button>
+    </div>
   </header>
 
   <main class="layout">
@@ -231,7 +237,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
           </div>
           <div class="field">
             <label for="tee">Abschlag</label>
-            <select id="tee"><option>Gelb</option><option>Weiß</option><option>Blau</option><option>Rot</option><option>Schwarz</option><option>Orange</option></select>
+            <select id="tee"><option value="Gelb">Gelb</option><option value="Weiß">Weiß</option><option value="Blau">Blau</option><option value="Rot">Rot</option><option value="Schwarz">Schwarz</option><option value="Orange">Orange</option></select>
           </div>
           <div class="field">
             <label for="title">Überschrift</label>
@@ -348,13 +354,135 @@ table.holes[data-mode="match"] .c-len { display: none; }
   const OLD_KEY = 'teeoff-scorecard-v1';  // Daten der ursprünglichen teeoff.kpmn-Version übernehmen
   const $ = (id) => document.getElementById(id);
 
+  // ---------- Sprache ----------
+  // #lang=de|en (vom Tracer übergeben) > zuletzt gewählt > Browsersprache. Die deutschen Texte sind die Schlüssel.
+  const EN = {
+    // Seite
+    'Runde oder Turnier eintragen, Design und Format wählen, als PNG speichern.': 'Enter a round or tournament, pick a design and format, save as PNG.',
+    'Exportieren': 'Export', 'Importieren': 'Import',
+    'Vorlage oder eigenes Design': 'Template or own design',
+    'Änderungen an einer Vorlage werden automatisch als eigenes Design gespeichert, die Vorlage bleibt unverändert.':
+      'Changes to a template are saved automatically as your own design; the template stays unchanged.',
+    'Schrift': 'Font', 'Marke (Kopfzeile)': 'Brand (header)', 'Handle (Fußzeile)': 'Handle (footer)',
+    'z. B. GC Musterplatz': 'e.g. Sample Golf Club', 'z. B. @deinkanal': 'e.g. @yourchannel',
+    'Hintergrund': 'Background', 'Fairway mit Tracer': 'Fairway with tracer', 'Mähstreifen': 'Mowing stripes', 'Schlicht': 'Plain',
+    'Bild wählen …': 'Choose image …', 'Entfernen': 'Remove', 'Form des Logos': 'Logo shape', 'rund': 'round', 'eckig': 'square',
+    'Farben': 'Colours', 'Hintergrund oben': 'Background top', 'Hintergrund unten': 'Background bottom',
+    'Tabellenkopf': 'Table header', 'Akzent': 'Accent', 'Text': 'Text', 'Text gedämpft': 'Text muted',
+    'Design löschen': 'Delete design',
+    'Runde': 'Round', 'Beispielrunde: einfach überschreiben': 'Sample round: just overwrite it',
+    'Golfplatz': 'Golf course', 'Datum': 'Date', 'Abschlag': 'Tee',
+    'Gelb': 'Yellow', 'Weiß': 'White', 'Blau': 'Blue', 'Rot': 'Red', 'Schwarz': 'Black',
+    'Überschrift': 'Heading', 'Anzahl Löcher': 'Number of holes',
+    'Spielmodus': 'Game mode', 'Zählspiel': 'Stroke play', 'Schläge zu Par': 'Strokes to par',
+    'Punkte mit Vorgabe': 'Points with handicap', 'Teamscore': 'Team score', 'Lochspiel': 'Match play', 'Loch für Loch': 'Hole by hole',
+    'Spielvorgabe': 'Playing handicap', 'So wird gerechnet': 'How it is calculated',
+    'Die Vorgabeschläge werden nach der HCP-Reihenfolge der Löcher verteilt. Punkte = Par + Vorgabeschläge + 2 − Score.':
+      'Handicap strokes are allocated by the stroke index of the holes. Points = par + handicap strokes + 2 − score.',
+    'Teamname': 'Team name', 'Mitspieler': 'Players', 'z. B. Felix, Max, Tom': 'e.g. Felix, Max, Tom', 'Gegner': 'Opponent',
+    'Turnier': 'Tournament', 'Diese Runde ist ein Turnier': 'This round is a tournament', 'Turniername': 'Tournament name',
+    'z. B. Anfängerturnier': 'e.g. Beginners’ Cup', 'Platzierung': 'Position', 'z. B. 3': 'e.g. 3', 'Teilnehmer': 'Players in field', 'z. B. 24': 'e.g. 24',
+    'Löcher': 'Holes', 'Beispiel laden': 'Load sample', 'Scores leeren': 'Clear scores',
+    'Leere Scores zählen nicht mit. So kannst du auch eine laufende Runde zeigen.': 'Empty scores do not count, so you can also show a round in progress.',
+    'Loch': 'Hole', 'Meter': 'Metres',
+    'Ausgabeformat': 'Output format', 'Beitrag': 'Post', 'Einblendung Runde': 'Overlay round', 'Einblendung Loch': 'Overlay hole',
+    'transparent': 'transparent', 'Loch für die Einblendung': 'Hole for the overlay', 'Vorschau der Scorecard': 'Scorecard preview',
+    'Als PNG speichern': 'Save as PNG',
+    // Editor
+    'GC Musterplatz': 'Sample Golf Club', '{n} auf': '{n} up', '{n} ab': '{n} down',
+    'Offen': 'Open', 'Gewonnen': 'Won', 'Verloren': 'Lost', 'Geteilt': 'Halved', 'Läuft': 'Ongoing',
+    'Par Loch {n}': 'Par hole {n}', 'Meter Loch {n}': 'Metres hole {n}', 'HCP-Index Loch {n}': 'Stroke index hole {n}',
+    'Score Loch {n}': 'Score hole {n}', 'Score Gegner Loch {n}': 'Opponent score hole {n}',
+    'Ich': 'Me', 'Pkt': 'Pts', 'Stand': 'Status',
+    'Trag deinen Score und den deines Gegners ein. Ist das Match entschieden, werden weitere Löcher nicht mehr gewertet.':
+      'Enter your score and your opponent’s. Once the match is decided, further holes no longer count.',
+    'HCP ist der Index des Lochs von der Scorekarte (1 = schwerstes Loch). Leere Scores zählen nicht mit.':
+      'HCP is the stroke index of the hole from the scorecard (1 = hardest hole). Empty scores do not count.',
+    'entsch.': 'decided', 'GES.': 'TOT.', '{n} Pkt': '{n} pts', 'Loch {n}': 'Hole {n}',
+    'Beispielrunde geladen.': 'Sample round loaded.', 'Wirklich leeren?': 'Really clear?',
+    'Scores geleert. Par, Meter und HCP bleiben stehen.': 'Scores cleared. Par, metres and HCP are kept.',
+    // Grafik
+    'LOCH': 'HOLE', 'PUNKTE': 'POINTS', 'ICH': 'ME', 'STAND': 'STATUS', 'METER': 'METRES',
+    'Punkte': 'Points', 'nach {a} von {b}': 'after {a} of {b}', 'Brutto {n}': 'Gross {n}', 'gegen {name}': 'vs {name}',
+    'über Par': 'over par', 'unter Par': 'under par',
+    'Stableford · Vorgabe {n}': 'Stableford · handicap {n}', 'Lochspiel gegen {name}': 'Match play vs {name}',
+    'Abschlag {tee}': '{tee} tees', 'PLATZ {p} VON {f}': 'PLACE {p} OF {f}', 'PLATZ {p}': 'PLACE {p}',
+    '3+ PKT': '3+ PTS', '2 PKT': '2 PTS', '1 PKT': '1 PT', '0 PKT': '0 PTS',
+    'GEWONNEN': 'WON', 'GETEILT': 'HALVED', 'VERLOREN': 'LOST', 'SCHLÄGE': 'STROKES', 'DOPPEL+': 'DOUBLE+',
+    '{p} Punkte · Brutto {n}': '{p} points · gross {n}', 'Noch keine Scores': 'No scores yet',
+    '{w} {s} gegen {name}': '{w} {s} vs {name}', 'Noch keine Löcher gespielt': 'No holes played yet',
+    '{n} Schläge auf Par {par}': '{n} strokes on par {par}',
+    'Ø {avg} Punkte pro Loch   ·   Spielvorgabe {hcp}': 'Ø {avg} points per hole   ·   playing handicap {hcp}',
+    '{a} von {b} Löchern gespielt   ·   Ø {avg} Schläge pro Loch': '{a} of {b} holes played   ·   Ø {avg} strokes per hole',
+    'Par oder besser: {pct} %   ·   Ø {avg} Schläge pro Loch': 'Par or better: {pct} %   ·   Ø {avg} strokes per hole',
+    'Team: {players}   ·   Ø {avg} pro Loch': 'Team: {players}   ·   Ø {avg} per hole',
+    'ZUSAMMENFASSUNG': 'SUMMARY', 'Doppel+': 'Double+', 'Loch gewonnen': 'Hole won', 'Vorgabeschlag': 'Handicap stroke',
+    '+1 Schlag': '+1 stroke', '+{n} Schläge': '+{n} strokes', 'GESAMT': 'TOTAL', 'Punkte nach {n}': 'points after {n}',
+    '{n} nach {h}': '{n} after {h}', 'Vorschau: {course}, {score}': 'Preview: {course}, {score}',
+    // Speichern
+    'runde': 'round', 'loch': 'hole', 'beitrag': 'post', 'einblendung-runde': 'overlay-round', 'einblendung-loch': 'overlay-hole',
+    'Gespeichert: {file}': 'Saved: {file}', 'Speichern abgebrochen.': 'Saving cancelled.',
+    'Es ist schon ein Speichern-Dialog offen. Kurz warten und nochmal tippen.': 'A save dialog is already open. Wait a moment and tap again.',
+    'Speichern ist hier gerade nicht möglich. Rechtsklick bzw. lange auf die Vorschau drücken und „Bild speichern“ wählen.':
+      'Saving is not possible here right now. Right-click or long-press the preview and choose “Save image”.',
+    'Bild wird vorbereitet …': 'Preparing the image …',
+    'Das Bild konnte nicht erzeugt werden. Bitte nochmal versuchen.': 'The image could not be created. Please try again.',
+    'Das Bild konnte nicht erzeugt werden (Logo aus fremder Quelle?).': 'The image could not be created (logo from another source?).',
+    // Designs
+    'Systemschrift (offline)': 'System font (offline)',
+    'Clubhaus (hell)': 'Clubhouse (light)', 'Fairway (grün)': 'Fairway (green)', 'Minimal (weiß)': 'Minimal (white)', 'Mono (schwarz)': 'Mono (black)',
+    'Das Design ist zu groß für den Browser-Speicher (meist das Logo). Bitte ein kleineres Logo wählen.':
+      'The design is too large for the browser storage (usually the logo). Please choose a smaller logo.',
+    'Ohne Namen': 'Untitled', 'Vorlagen': 'Templates', 'Eigene Designs': 'Own designs',
+    'Vorlage: Änderungen werden automatisch als eigenes Design gespeichert, die Vorlage bleibt unverändert.':
+      'Template: changes are saved automatically as your own design; the template stays unchanged.',
+    'Eigenes Design: Änderungen werden sofort gespeichert. Mit „Exportieren“ als Datei sichern oder weitergeben.':
+      'Own design: changes are saved immediately. Use “Export” to back it up as a file or share it.',
+    '{name} (eigenes)': '{name} (own)', 'Logo übernommen.': 'Logo applied.', 'Das Bild konnte nicht gelesen werden.': 'The image could not be read.',
+    'Wirklich löschen?': 'Really delete?', 'Design gelöscht.': 'Design deleted.', 'Importiertes Design': 'Imported design',
+    'Design „{name}“ importiert.': 'Design “{name}” imported.',
+    'Diese Datei ist kein Scorecard-Design (JSON aus „Exportieren“).': 'This file is not a scorecard design (JSON from “Export”).'
+  };
+  const LANG_KEY = 'kpmn-scorecard-lang';
+  const LANG = (() => {
+    const p = new URLSearchParams(location.hash.slice(1)).get('lang');
+    if (p === 'de' || p === 'en') { try { localStorage.setItem(LANG_KEY, p); } catch (e) { /* ohne Speicher */ } return p; }
+    try { const s = localStorage.getItem(LANG_KEY); if (s === 'de' || s === 'en') return s; } catch (e) { /* ohne Speicher */ }
+    return (navigator.language || '').toLowerCase().startsWith('de') ? 'de' : 'en';
+  })();
+  const t = (s, v) => {
+    let r = LANG === 'en' && Object.prototype.hasOwnProperty.call(EN, s) ? EN[s] : s;
+    if (v) r = r.replace(/\{(\w+)\}/g, (_, k) => v[k]);
+    return r;
+  };
+  const LOCALE = LANG === 'en' ? 'en-GB' : 'de-DE';
+  function translatePage() {
+    document.documentElement.lang = LANG;
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const s = n.nodeValue.trim();
+      if (s && n.parentElement.tagName !== 'SCRIPT') n.nodeValue = n.nodeValue.replace(s, t(s));
+    }
+    document.querySelectorAll('[placeholder],[aria-label]').forEach(el => {
+      ['placeholder', 'aria-label'].forEach(a => { if (el.hasAttribute(a)) el.setAttribute(a, t(el.getAttribute(a))); });
+    });
+    document.querySelectorAll('.lang [data-lang]').forEach(b => {
+      b.classList.toggle('on', b.dataset.lang === LANG);
+      b.addEventListener('click', () => {
+        try { localStorage.setItem(LANG_KEY, b.dataset.lang); } catch (e) { /* ohne Speicher */ }
+        location.hash = location.hash.replace(/(^#|&)lang=\w+/, '');
+        location.reload();
+      });
+    });
+  }
+
   // ---------- Daten ----------
   const SAMPLE_HOLES = [
     [4,352,5,7,5],[4,318,6,11,5],[3,147,4,15,3],[5,462,6,3,6],[4,371,5,1,6],[4,334,5,9,4],[3,128,3,17,4],[4,305,5,13,5],[5,448,7,5,6],
     [4,361,5,8,5],[3,155,4,16,4],[4,327,6,12,5],[5,471,6,2,6],[4,342,4,10,5],[4,389,5,4,5],[3,136,2,18,3],[5,455,6,6,6],[4,310,6,14,5]
   ];
   const SAMPLE = {
-    course: 'GC Musterplatz', date: '2026-10-17', tee: 'Gelb', title: 'Scorecard', holes: 18, themeId: 'nightrange',
+    course: t('GC Musterplatz'), date: '2026-10-17', tee: 'Gelb', title: 'Scorecard', holes: 18, themeId: 'nightrange',
     mode: 'stroke', vorgabe: 28, team: 'Team Fairway', players: '', opp: 'Max',
     tour: { on: false, name: '', place: '', field: '' },
     data: SAMPLE_HOLES.map(([par, len, score, hcp, opp]) => ({ par, len, score, hcp, opp })),
@@ -384,11 +512,11 @@ table.holes[data-mode="match"] .c-len { display: none; }
 
   const num = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : null; };
   const fmtDiff = (d) => d === 0 ? '±0' : (d > 0 ? '+' + d : '−' + Math.abs(d));
-  const fmtM = (n) => n.toLocaleString('de-DE');
-  const fmtDec = (n) => n.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const fmtDate = (iso) => { if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return ''; const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
-  const statusText = (lead) => lead === 0 ? 'AS' : (lead > 0 ? `${lead} auf` : `${-lead} ab`);
-  const oppName = () => (state.opp || '').trim() || 'Gegner';
+  const fmtM = (n) => n.toLocaleString(LOCALE);
+  const fmtDec = (n) => n.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const fmtDate = (iso) => { if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return ''; const [y, m, d] = iso.split('-'); return LANG === 'en' ? `${d}/${m}/${y}` : `${d}.${m}.${y}`; };
+  const statusText = (lead) => lead === 0 ? 'AS' : (lead > 0 ? t('{n} auf', { n: lead }) : t('{n} ab', { n: -lead }));
+  const oppName = () => (state.opp || '').trim() || t('Gegner');
 
   // ---------- Auswertung ----------
   function stats() {
@@ -431,14 +559,14 @@ table.holes[data-mode="match"] .c-len { display: none; }
     st.diff = st.score - st.parPlayed;
     // Lochspiel-Ergebnis
     const allDone = st.decided || st.matchPlayed === n;
-    if (st.matchPlayed === 0) { st.matchShort = '–'; st.matchWord = 'Offen'; }
+    if (st.matchPlayed === 0) { st.matchShort = '–'; st.matchWord = t('Offen'); }
     else if (st.decided && st.decided.remaining > 0) {
       st.matchShort = `${Math.abs(st.decided.lead)}&${st.decided.remaining}`;
-      st.matchWord = st.decided.lead > 0 ? 'Gewonnen' : 'Verloren';
+      st.matchWord = st.decided.lead > 0 ? t('Gewonnen') : t('Verloren');
     } else if (allDone) {
       st.matchShort = statusText(st.lead);
-      st.matchWord = st.lead > 0 ? 'Gewonnen' : (st.lead < 0 ? 'Verloren' : 'Geteilt');
-    } else { st.matchShort = statusText(st.lead); st.matchWord = 'Läuft'; }
+      st.matchWord = st.lead > 0 ? t('Gewonnen') : (st.lead < 0 ? t('Verloren') : t('Geteilt'));
+    } else { st.matchShort = statusText(st.lead); st.matchWord = t('Läuft'); st.running = true; }
     return st;
   }
 
@@ -456,17 +584,17 @@ table.holes[data-mode="match"] .c-len { display: none; }
 
   // ---------- Editor ----------
   function buildRows() {
-    $('holes').innerHTML = Array.from({ length: 18 }, (_, i) => `<option value="${i + 1}">${i + 1} ${i ? 'Löcher' : 'Loch'}</option>`).join('');
+    $('holes').innerHTML = Array.from({ length: 18 }, (_, i) => `<option value="${i + 1}">${i + 1} ${i ? t('Löcher') : t('Loch')}</option>`).join('');
     let html = '';
     for (let i = 0; i < 18; i++) {
       const no = i + 1;
       html += `<tr id="row-${no}">
         <td class="no">${no}</td>
-        <td><select id="par-${no}" aria-label="Par Loch ${no}">${[3,4,5,6].map(p => `<option value="${p}">${p}</option>`).join('')}</select></td>
-        <td class="c-len"><input id="len-${no}" type="number" inputmode="numeric" min="0" max="999" aria-label="Meter Loch ${no}"></td>
-        <td class="c-hcp"><input id="hcp-${no}" type="number" inputmode="numeric" min="1" max="18" aria-label="HCP-Index Loch ${no}"></td>
-        <td><input id="score-${no}" type="number" inputmode="numeric" min="1" max="19" aria-label="Score Loch ${no}"></td>
-        <td class="c-opp"><input id="opp-${no}" type="number" inputmode="numeric" min="1" max="19" aria-label="Score Gegner Loch ${no}"></td>
+        <td><select id="par-${no}" aria-label="${t('Par Loch {n}', { n: no })}">${[3,4,5,6].map(p => `<option value="${p}">${p}</option>`).join('')}</select></td>
+        <td class="c-len"><input id="len-${no}" type="number" inputmode="numeric" min="0" max="999" aria-label="${t('Meter Loch {n}', { n: no })}"></td>
+        <td class="c-hcp"><input id="hcp-${no}" type="number" inputmode="numeric" min="1" max="18" aria-label="${t('HCP-Index Loch {n}', { n: no })}"></td>
+        <td><input id="score-${no}" type="number" inputmode="numeric" min="1" max="19" aria-label="${t('Score Loch {n}', { n: no })}"></td>
+        <td class="c-opp"><input id="opp-${no}" type="number" inputmode="numeric" min="1" max="19" aria-label="${t('Score Gegner Loch {n}', { n: no })}"></td>
         <td class="res" id="res-${no}">–</td>
       </tr>`;
       if (i === 8) html += sumRow('a');
@@ -516,13 +644,13 @@ table.holes[data-mode="match"] .c-len { display: none; }
     $('f-players').hidden = mode !== 'scramble';
     $('f-opp').hidden = mode !== 'match';
     $('tour-fields').hidden = !state.tour.on;
-    $('th-score').textContent = mode === 'match' ? 'Ich' : (mode === 'scramble' ? 'Team' : 'Score');
+    $('th-score').textContent = mode === 'match' ? t('Ich') : (mode === 'scramble' ? 'Team' : 'Score');
     $('th-opp').textContent = oppName();
-    $('th-res').textContent = mode === 'stableford' ? 'Pkt' : (mode === 'match' ? 'Stand' : '+/−');
+    $('th-res').textContent = mode === 'stableford' ? t('Pkt') : (mode === 'match' ? t('Stand') : '+/−');
     $('holes-hint').textContent = mode === 'match'
-      ? 'Trag deinen Score und den deines Gegners ein. Ist das Match entschieden, werden weitere Löcher nicht mehr gewertet.'
-      : (mode === 'stableford' ? 'HCP ist der Index des Lochs von der Scorekarte (1 = schwerstes Loch). Leere Scores zählen nicht mit.'
-      : 'Leere Scores zählen nicht mit. So kannst du auch eine laufende Runde zeigen.');
+      ? t('Trag deinen Score und den deines Gegners ein. Ist das Match entschieden, werden weitere Löcher nicht mehr gewertet.')
+      : (mode === 'stableford' ? t('HCP ist der Index des Lochs von der Scorekarte (1 = schwerstes Loch). Leere Scores zählen nicht mit.')
+      : t('Leere Scores zählen nicht mit. So kannst du auch eine laufende Runde zeigen.'));
 
     for (let i = 0; i < 18; i++) {
       const no = i + 1, row = $('row-' + no);
@@ -534,7 +662,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
         else setRes(el, o.strokes ? `(+${o.strokes})` : '–', '');
       } else if (mode === 'match') {
         if (o.lead !== null) setRes(el, statusText(o.lead), o.lead > 0 ? 'good' : (o.lead === 0 ? 'bad' : ''));
-        else setRes(el, (st.decided && i > st.decided.at) ? 'entsch.' : '–', '');
+        else setRes(el, (st.decided && i > st.decided.at) ? t('entsch.') : '–', '');
       } else {
         if (o.sc) setRes(el, fmtDiff(o.d), o.d < 0 ? 'good' : (o.d > 0 ? 'bad' : ''));
         else setRes(el, '–', '');
@@ -543,7 +671,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
     // Summenzeilen
     const two = n > 9;
     $('sum-a').hidden = !two;
-    const ranges = two ? [['a', 0, 9, 'OUT'], ['b', 9, n, 'IN']] : [['b', 0, n, 'GES.']];
+    const ranges = two ? [['a', 0, 9, 'OUT'], ['b', 9, n, 'IN']] : [['b', 0, n, t('GES.')]];
     ranges.forEach(([k, a, b, label]) => {
       const r = rangeSum(st, a, b);
       $(`sum-${k}-label`).textContent = label;
@@ -552,14 +680,14 @@ table.holes[data-mode="match"] .c-len { display: none; }
       $(`sum-${k}-score`).textContent = r.played ? r.score : '–';
       $(`sum-${k}-opp`).textContent = r.opp || '–';
       const el = $(`sum-${k}-res`);
-      if (mode === 'stableford') setRes(el, r.played ? `${r.pts} Pkt` : '–', r.played ? 'bad' : '');
+      if (mode === 'stableford') setRes(el, r.played ? t('{n} Pkt', { n: r.pts }) : '–', r.played ? 'bad' : '');
       else if (mode === 'match') setRes(el, r.lastLead !== null ? statusText(r.lastLead) : '–', r.lastLead > 0 ? 'good' : '');
       else { const d = r.score - r.parPlayed; setRes(el, r.played ? fmtDiff(d) : '–', r.played ? (d < 0 ? 'good' : 'bad') : ''); }
     });
     $('sample-note').hidden = !state.sample;
     const sel = $('loch');
     const want = lochSel && lochSel <= n ? lochSel : (st.lastPlayed || 1);
-    sel.innerHTML = Array.from({ length: n }, (_, i) => `<option value="${i + 1}">Loch ${i + 1}</option>`).join('');
+    sel.innerHTML = Array.from({ length: n }, (_, i) => `<option value="${i + 1}">${t('Loch {n}', { n: i + 1 })}</option>`).join('');
     sel.value = String(want);
     lochSel = want;
     $('loch-wrap').hidden = fmt !== 'hole';
@@ -598,19 +726,19 @@ table.holes[data-mode="match"] .c-len { display: none; }
 
   $('btn-sample').addEventListener('click', () => {
     const keepMode = state.mode;
-    const keepTheme = state.themeId; state = normalize(SAMPLE); state.mode = keepMode; state.themeId = keepTheme; save(); fillForm(); schedule(); setStatus('Beispielrunde geladen.');
+    const keepTheme = state.themeId; state = normalize(SAMPLE); state.mode = keepMode; state.themeId = keepTheme; save(); fillForm(); schedule(); setStatus(t('Beispielrunde geladen.'));
   });
   let clearArmed = null;
   $('btn-clear').addEventListener('click', (e) => {
     const b = e.currentTarget;
     if (!clearArmed) {
-      b.textContent = 'Wirklich leeren?';
-      clearArmed = setTimeout(() => { b.textContent = 'Scores leeren'; clearArmed = null; }, 3500);
+      b.textContent = t('Wirklich leeren?');
+      clearArmed = setTimeout(() => { b.textContent = t('Scores leeren'); clearArmed = null; }, 3500);
       return;
     }
-    clearTimeout(clearArmed); clearArmed = null; b.textContent = 'Scores leeren';
+    clearTimeout(clearArmed); clearArmed = null; b.textContent = t('Scores leeren');
     state.data.forEach(h => { h.score = ''; h.opp = ''; }); state.sample = false; save(); fillForm(); schedule();
-    setStatus('Scores geleert. Par, Meter und HCP bleiben stehen.');
+    setStatus(t('Scores geleert. Par, Meter und HCP bleiben stehen.'));
   });
 
   // ---------- Zeichnen ----------
@@ -655,9 +783,9 @@ table.holes[data-mode="match"] .c-len { display: none; }
   const leadColor = (l) => l > 0 ? C.lime : (l === 0 ? C.white : C.mist);
 
   function rowDefs(mode) {
-    if (mode === 'stableford') return [['hole', 58, 'LOCH'], ['par', 44, 'PAR'], ['hcp', 44, 'HCP'], ['score', 88, 'SCORE'], ['pts', 46, 'PUNKTE']];
-    if (mode === 'match') return [['hole', 58, 'LOCH'], ['par', 44, 'PAR'], ['me', 76, 'ICH'], ['opp', 76, oppName().toUpperCase()], ['stat', 46, 'STAND']];
-    return [['hole', 58, 'LOCH'], ['len', 44, 'METER'], ['par', 44, 'PAR'], ['score', 88, mode === 'scramble' ? 'TEAM' : 'SCORE'], ['diff', 46, '+/−']];
+    if (mode === 'stableford') return [['hole', 58, t('LOCH')], ['par', 44, 'PAR'], ['hcp', 44, 'HCP'], ['score', 88, 'SCORE'], ['pts', 46, t('PUNKTE')]];
+    if (mode === 'match') return [['hole', 58, t('LOCH')], ['par', 44, 'PAR'], ['me', 76, t('ICH')], ['opp', 76, oppName().toUpperCase()], ['stat', 46, t('STAND')]];
+    return [['hole', 58, t('LOCH')], ['len', 44, t('METER')], ['par', 44, 'PAR'], ['score', 88, mode === 'scramble' ? 'TEAM' : 'SCORE'], ['diff', 46, '+/−']];
   }
   const tableH = (s) => rowDefs(state.mode).reduce((a, r) => a + r[1], 0) * s;
 
@@ -667,7 +795,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
     const labelW = Math.round(w * 0.15);
     if (n <= 9) {
       const colW = (w - labelW) / (n + 1);
-      return drawTable(st, x, y, labelW, colW, 0, n, 'GES.', s);
+      return drawTable(st, x, y, labelW, colW, 0, n, t('GES.'), s);
     }
     const colW = (w - labelW) / 10;
     let h = drawTable(st, x, y, labelW, colW, 0, 9, 'OUT', s);
@@ -778,16 +906,16 @@ table.holes[data-mode="match"] .c-len { display: none; }
   // Was oben groß steht, je nach Modus
   function hero(st) {
     if (st.mode === 'stableford') {
-      return { big: st.played ? String(st.points) : '–', pill: st.played ? 'Punkte' : null, pillFill: C.lime,
-        sub: st.played < st.n ? `nach ${st.played} von ${st.n}` : `Brutto ${st.score}` };
+      return { big: st.played ? String(st.points) : '–', pill: st.played ? t('Punkte') : null, pillFill: C.lime,
+        sub: st.played < st.n ? t('nach {a} von {b}', { a: st.played, b: st.n }) : t('Brutto {n}', { n: st.score }) };
     }
     if (st.mode === 'match') {
       const w = st.matchWord;
       return { big: st.matchShort, pill: st.matchPlayed ? w : null,
-        pillFill: w === 'Gewonnen' ? C.lime : (w === 'Läuft' ? null : C.white), sub: `gegen ${oppName()}` };
+        pillFill: w === t('Gewonnen') ? C.lime : (st.running ? null : C.white), sub: t('gegen {name}', { name: oppName() }) };
     }
     return { big: st.played ? String(st.score) : '–', pill: st.played ? fmtDiff(st.diff) : null, pillFill: C.lime,
-      sub: st.played < st.n ? `nach ${st.played} von ${st.n}` : (st.diff > 0 ? 'über Par' : (st.diff < 0 ? 'unter Par' : 'Even Par')) };
+      sub: st.played < st.n ? t('nach {a} von {b}', { a: st.played, b: st.n }) : (st.diff > 0 ? t('über Par') : (st.diff < 0 ? t('unter Par') : 'Even Par')) };
   }
 
   function drawHero(st, right, top, s, bigSize) {
@@ -822,15 +950,15 @@ table.holes[data-mode="match"] .c-len { display: none; }
   }
   function modeLine(st) {
     const m = state.mode;
-    if (m === 'stableford') return `Stableford · Vorgabe ${parseInt(state.vorgabe, 10) || 0}`;
+    if (m === 'stableford') return t('Stableford · Vorgabe {n}', { n: parseInt(state.vorgabe, 10) || 0 });
     if (m === 'scramble') return state.team ? `Scramble · ${state.team}` : 'Scramble';
-    if (m === 'match') return `Lochspiel gegen ${oppName()}`;
-    return state.tee ? `Abschlag ${state.tee}` : '';
+    if (m === 'match') return t('Lochspiel gegen {name}', { name: oppName() });
+    return state.tee ? t('Abschlag {tee}', { tee: t(state.tee) }) : '';
   }
   function placeText() {
     const p = parseInt(state.tour.place, 10), f = parseInt(state.tour.field, 10);
     if (!state.tour.on || !p) return '';
-    return f ? `PLATZ ${p} VON ${f}` : `PLATZ ${p}`;
+    return f ? t('PLATZ {p} VON {f}', { p, f }) : t('PLATZ {p}', { p });
   }
 
   function header(W, y, st, s = 1) {
@@ -843,7 +971,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
     const lab = labelText();
     const lf = fitFont(lab, 600, 20 * s, maxW, 'b', 2.5 * s);
     text(lab, tx, y + 26 * s, F(600, lf, 'b'), C.lime, 'left', 'alphabetic', 2.5 * s);
-    const name = (state.course || 'Golfplatz').toUpperCase();
+    const name = (state.course || t('Golfplatz')).toUpperCase();
     const fs = fitFont(name, 700, 66 * s, maxW, null, 0.5 * s);
     const nameY = y + 38 * s + fs * 0.82;
     text(name, tx, nameY, F(700, fs), C.white, 'left', 'alphabetic', 0.5 * s);
@@ -861,40 +989,40 @@ table.holes[data-mode="match"] .c-len { display: none; }
 
   function tileDefs(st) {
     if (st.mode === 'stableford') return [
-      { label: '3+ PKT', color: C.lime, v: st.pc.p3 }, { label: '2 PKT', color: C.white, v: st.pc.p2 },
-      { label: '1 PKT', color: C.mist, v: st.pc.p1 }, { label: '0 PKT', color: C.slate, v: st.pc.p0 }];
+      { label: t('3+ PKT'), color: C.lime, v: st.pc.p3 }, { label: t('2 PKT'), color: C.white, v: st.pc.p2 },
+      { label: t('1 PKT'), color: C.mist, v: st.pc.p1 }, { label: t('0 PKT'), color: C.slate, v: st.pc.p0 }];
     if (st.mode === 'match') return [
-      { label: 'GEWONNEN', color: C.lime, v: st.won }, { label: 'GETEILT', color: C.white, v: st.halved },
-      { label: 'VERLOREN', color: C.slate, v: st.lost }, { label: 'SCHLÄGE', color: C.mist, v: st.score, noBar: true }];
+      { label: t('GEWONNEN'), color: C.lime, v: st.won }, { label: t('GETEILT'), color: C.white, v: st.halved },
+      { label: t('VERLOREN'), color: C.slate, v: st.lost }, { label: t('SCHLÄGE'), color: C.mist, v: st.score, noBar: true }];
     return [
       { label: 'BIRDIE+', color: C.lime, v: st.cnt.birdie }, { label: 'PAR', color: C.white, v: st.cnt.par },
-      { label: 'BOGEY', color: C.mist, v: st.cnt.bogey }, { label: 'DOPPEL+', color: C.slate, v: st.cnt.double }];
+      { label: 'BOGEY', color: C.mist, v: st.cnt.bogey }, { label: t('DOPPEL+'), color: C.slate, v: st.cnt.double }];
   }
   function summaryRight(st) {
     const parts = [];
-    const pt = placeText(); if (pt) parts.push(pt.charAt(0) + pt.slice(1).toLowerCase().replace('von', 'von'));
-    if (st.mode === 'stableford') parts.push(st.played ? `${st.points} Punkte · Brutto ${st.score}` : 'Noch keine Scores');
-    else if (st.mode === 'match') parts.push(st.matchPlayed ? `${st.matchWord === 'Läuft' ? 'Stand' : st.matchWord} ${st.matchShort} gegen ${oppName()}` : 'Noch keine Löcher gespielt');
+    const pt = placeText(); if (pt) parts.push(pt.charAt(0) + pt.slice(1).toLowerCase());
+    if (st.mode === 'stableford') parts.push(st.played ? t('{p} Punkte · Brutto {n}', { p: st.points, n: st.score }) : t('Noch keine Scores'));
+    else if (st.mode === 'match') parts.push(st.matchPlayed ? t('{w} {s} gegen {name}', { w: st.running ? t('Stand') : st.matchWord, s: st.matchShort, name: oppName() }) : t('Noch keine Löcher gespielt'));
     else {
       if (st.n > 9) { const a = rangeSum(st, 0, 9), b = rangeSum(st, 9, st.n); if (a.played) parts.push(`OUT ${a.score}`); if (b.played) parts.push(`IN ${b.score}`); }
-      parts.push(st.played ? `${st.score} Schläge auf Par ${st.parPlayed}` : 'Noch keine Scores');
+      parts.push(st.played ? t('{n} Schläge auf Par {par}', { n: st.score, par: st.parPlayed }) : t('Noch keine Scores'));
     }
     return parts.join('  ·  ');
   }
   function summaryLine(st) {
     if (!st.played) return '';
-    if (st.mode === 'stableford') return `Ø ${fmtDec(st.points / st.played)} Punkte pro Loch   ·   Spielvorgabe ${parseInt(state.vorgabe, 10) || 0}`;
-    if (st.mode === 'match') return st.matchPlayed ? `${st.matchPlayed} von ${st.n} Löchern gespielt   ·   Ø ${fmtDec(st.score / st.played)} Schläge pro Loch` : '';
+    if (st.mode === 'stableford') return t('Ø {avg} Punkte pro Loch   ·   Spielvorgabe {hcp}', { avg: fmtDec(st.points / st.played), hcp: parseInt(state.vorgabe, 10) || 0 });
+    if (st.mode === 'match') return st.matchPlayed ? t('{a} von {b} Löchern gespielt   ·   Ø {avg} Schläge pro Loch', { a: st.matchPlayed, b: st.n, avg: fmtDec(st.score / st.played) }) : '';
     const pct = Math.round(100 * (st.cnt.birdie + st.cnt.par) / st.played);
-    const base = `Par oder besser: ${pct} %   ·   Ø ${fmtDec(st.score / st.played)} Schläge pro Loch`;
-    if (st.mode === 'scramble' && state.players.trim()) return `Team: ${state.players.trim()}   ·   Ø ${fmtDec(st.score / st.played)} pro Loch`;
+    const base = t('Par oder besser: {pct} %   ·   Ø {avg} Schläge pro Loch', { pct, avg: fmtDec(st.score / st.played) });
+    if (st.mode === 'scramble' && state.players.trim()) return t('Team: {players}   ·   Ø {avg} pro Loch', { players: state.players.trim(), avg: fmtDec(st.score / st.played) });
     return base;
   }
 
   function summary(x, y, w, st, opt) {
     const s = opt.s || 1;
     let yy = y;
-    const lab = 'ZUSAMMENFASSUNG';
+    const lab = t('ZUSAMMENFASSUNG');
     text(lab, x, yy + 20 * s, F(600, 20 * s, 'b'), C.lime, 'left', 'alphabetic', 2.5 * s);
     const labW = measure(lab, F(600, 20 * s, 'b'), 2.5 * s);
     const right = summaryRight(st);
@@ -931,12 +1059,12 @@ table.holes[data-mode="match"] .c-len { display: none; }
   }
 
   function legend(x, y, s) {
-    let items = [['Eagle', -2], ['Birdie', -1], ['Bogey', 1], ['Doppel+', 2]];
+    let items = [['Eagle', -2], ['Birdie', -1], ['Bogey', 1], [t('Doppel+'), 2]];
     let lx = x;
     if (state.mode === 'match') {
       ctx.lineWidth = 2 * s; ctx.strokeStyle = C.lime; ctx.beginPath(); ctx.arc(lx + 12 * s, y, 10 * s, 0, Math.PI * 2); ctx.stroke();
-      text('Loch gewonnen', lx + 32 * s, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
-      lx += 32 * s + measure('Loch gewonnen', F(500, 20 * s, 'b')) + 30 * s;
+      text(t('Loch gewonnen'), lx + 32 * s, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
+      lx += 32 * s + measure(t('Loch gewonnen'), F(500, 20 * s, 'b')) + 30 * s;
       text('AS = All Square', lx, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
       return;
     }
@@ -947,7 +1075,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
     });
     if (state.mode === 'stableford') {
       ctx.fillStyle = C.lime; ctx.beginPath(); ctx.arc(lx + 8 * s, y, 4 * s, 0, Math.PI * 2); ctx.fill();
-      text('Vorgabeschlag', lx + 22 * s, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
+      text(t('Vorgabeschlag'), lx + 22 * s, y + 1 * s, F(500, 20 * s, 'b'), C.mist, 'left', 'middle');
     }
   }
   function footer(W, y, s) {
@@ -999,7 +1127,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
     const tx = hasLogo ? x + 104 : x, maxW = right - heroW - tx - 24;
     const lab = labelText();
     text(lab, tx, y + 22, F(600, fitFont(lab, 600, 18, maxW, 'b', 2.5), 'b'), C.lime, 'left', 'alphabetic', 2.5);
-    const name = (state.course || 'Golfplatz').toUpperCase();
+    const name = (state.course || t('Golfplatz')).toUpperCase();
     const fs = fitFont(name, 700, 50, maxW, null, 0.5);
     text(name, tx, y + 34 + fs * 0.8, F(700, fs), C.white, 'left', 'alphabetic', 0.5);
     const meta = [fmtDate(state.date), modeLine(st), placeText() ? placeText().charAt(0) + placeText().slice(1).toLowerCase() : ''].filter(Boolean).join('  ·  ');
@@ -1022,7 +1150,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
     ctx.fillStyle = C.lime; ctx.fillRect(px, py, 200, ph);
     ctx.restore();
     rr(px + 1, py + 1, pw - 2, ph - 2, 26); ctx.strokeStyle = tint(0.14); ctx.lineWidth = 2; ctx.stroke();
-    text('LOCH', px + 100, py + 58, F(600, 22, 'b'), C.night, 'center', 'alphabetic', 4);
+    text(t('LOCH'), px + 100, py + 58, F(600, 22, 'b'), C.night, 'center', 'alphabetic', 4);
     text(String(i + 1), px + 100, py + 170, F(700, 120), C.night, 'center', 'alphabetic');
 
     const run = rangeSum(st, 0, i + 1);
@@ -1030,25 +1158,25 @@ table.holes[data-mode="match"] .c-len { display: none; }
     if (st.mode === 'stableford') {
       cols = [
         { label: 'PAR', val: String(o.par) },
-        { label: 'HCP', val: o.hcp ? String(o.hcp) : '–', sub: o.strokes ? `+${o.strokes} Schlag${o.strokes > 1 ? 'e' : ''}` : '' },
+        { label: 'HCP', val: o.hcp ? String(o.hcp) : '–', sub: o.strokes ? (o.strokes > 1 ? t('+{n} Schläge', { n: o.strokes }) : t('+1 Schlag')) : '' },
         { label: 'SCORE', val: o.sc ? String(o.sc) : '–', score: true },
-        { label: 'PUNKTE', val: o.sc ? String(o.pts) : '–', color: o.sc ? ptsColor(o.pts) : C.white },
-        { label: 'GESAMT', val: run.played ? String(run.pts) : '–', color: C.lime, sub: run.played ? `Punkte nach ${run.played}` : '' }];
+        { label: t('PUNKTE'), val: o.sc ? String(o.pts) : '–', color: o.sc ? ptsColor(o.pts) : C.white },
+        { label: t('GESAMT'), val: run.played ? String(run.pts) : '–', color: C.lime, sub: run.played ? t('Punkte nach {n}', { n: run.played }) : '' }];
     } else if (st.mode === 'match') {
-      const w = o.res === 1 ? 'Gewonnen' : (o.res === -1 ? 'Verloren' : (o.res === 0 ? 'Geteilt' : '–'));
+      const w = o.res === 1 ? t('Gewonnen') : (o.res === -1 ? t('Verloren') : (o.res === 0 ? t('Geteilt') : '–'));
       cols = [
         { label: 'PAR', val: String(o.par) },
-        { label: 'ICH', val: o.sc ? String(o.sc) : '–', color: o.res === 1 ? C.lime : (o.res === -1 ? C.mist : C.white) },
+        { label: t('ICH'), val: o.sc ? String(o.sc) : '–', color: o.res === 1 ? C.lime : (o.res === -1 ? C.mist : C.white) },
         { label: oppName().toUpperCase(), val: o.op ? String(o.op) : '–', color: o.res === -1 ? C.white : (o.res === 1 ? C.mist : C.white) },
-        { label: 'LOCH', val: w, small: true, color: o.res === 1 ? C.lime : C.white },
-        { label: 'STAND', val: o.lead !== null ? statusText(o.lead) : '–', color: o.lead !== null ? leadColor(o.lead) : C.white, small: o.lead !== null }];
+        { label: t('LOCH'), val: w, small: true, color: o.res === 1 ? C.lime : C.white },
+        { label: t('STAND'), val: o.lead !== null ? statusText(o.lead) : '–', color: o.lead !== null ? leadColor(o.lead) : C.white, small: o.lead !== null }];
     } else {
       cols = [
         { label: 'PAR', val: String(o.par) },
-        { label: 'METER', val: o.len ? String(o.len) : '–' },
+        { label: t('METER'), val: o.len ? String(o.len) : '–' },
         { label: st.mode === 'scramble' ? 'TEAM' : 'SCORE', val: o.sc ? String(o.sc) : '–', score: true },
-        { label: 'LOCH', val: o.sc ? fmtDiff(o.d) : '–', color: o.sc ? diffColor(o.d) : C.white },
-        { label: 'GESAMT', val: run.played ? fmtDiff(run.score - run.parPlayed) : '–', color: run.played ? diffColor(run.score - run.parPlayed) : C.white, sub: run.played ? `${run.score} nach ${run.played}` : '' }];
+        { label: t('LOCH'), val: o.sc ? fmtDiff(o.d) : '–', color: o.sc ? diffColor(o.d) : C.white },
+        { label: t('GESAMT'), val: run.played ? fmtDiff(run.score - run.parPlayed) : '–', color: run.played ? diffColor(run.score - run.parPlayed) : C.white, sub: run.played ? t('{n} nach {h}', { n: run.score, h: run.played }) : '' }];
     }
     const xs = [px + 290, px + 430, px + 600, px + 770, px + 920];
     cols.forEach((c, k) => {
@@ -1077,7 +1205,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
     else if (fmt === 'overlay') drawOverlay();
     else drawHole();
     const h = hero(stats());
-    cv.setAttribute('aria-label', `Vorschau: ${state.course || 'Golfplatz'}, ${h.big}${h.pill ? ' ' + h.pill : ''}`);
+    cv.setAttribute('aria-label', t('Vorschau: {course}, {score}', { course: state.course || t('Golfplatz'), score: h.big + (h.pill ? ' ' + h.pill : '') }));
   }
 
   // ---------- Export ----------
@@ -1085,8 +1213,8 @@ table.holes[data-mode="match"] .c-len { display: none; }
     try { if (!(window.claude && window.claude.use)) return null; return await Promise.race([window.claude.use('downloads'), new Promise(r => setTimeout(() => r(null), 1500))]); } catch (e) { return null; }
   })();
   function setStatus(msg, ok) { const el = $('status'); el.textContent = msg; el.classList.toggle('ok', !!ok); }
-  const slug = (s) => (s || 'runde').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'runde';
-  const FMT_NAME = { post: 'beitrag', story: 'story', overlay: 'einblendung-runde', hole: 'einblendung-loch' };
+  const slug = (s) => (s || t('runde')).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || t('runde');
+  const FMT_NAME = { post: t('beitrag'), story: 'story', overlay: t('einblendung-runde'), hole: t('einblendung-loch') };
   async function downloadBlob(blob, filename) {
     const dl = await dlPromise;
     if (!dl) {
@@ -1095,30 +1223,30 @@ table.holes[data-mode="match"] .c-len { display: none; }
       const a = document.createElement('a');
       a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
-      setStatus('Gespeichert: ' + filename, true);
+      setStatus(t('Gespeichert: {file}', { file: filename }), true);
       return;
     }
-    try { await dl.save({ filename, data: blob }); setStatus('Gespeichert: ' + filename, true); }
+    try { await dl.save({ filename, data: blob }); setStatus(t('Gespeichert: {file}', { file: filename }), true); }
     catch (err) {
       const code = err && err.code;
-      if (code === 'declined') setStatus('Speichern abgebrochen.');
-      else if (code === 'rate_limited') setStatus('Es ist schon ein Speichern-Dialog offen. Kurz warten und nochmal tippen.');
-      else setStatus('Speichern ist hier gerade nicht möglich. Rechtsklick bzw. lange auf die Vorschau drücken und „Bild speichern“ wählen.');
+      if (code === 'declined') setStatus(t('Speichern abgebrochen.'));
+      else if (code === 'rate_limited') setStatus(t('Es ist schon ein Speichern-Dialog offen. Kurz warten und nochmal tippen.'));
+      else setStatus(t('Speichern ist hier gerade nicht möglich. Rechtsklick bzw. lange auf die Vorschau drücken und „Bild speichern“ wählen.'));
     }
   }
   $('btn-save').addEventListener('click', async () => {
     render();
-    setStatus('Bild wird vorbereitet …');
-    const extra = fmt === 'hole' ? `-loch${lochSel}` : '';
+    setStatus(t('Bild wird vorbereitet …'));
+    const extra = fmt === 'hole' ? `-${t('loch')}${lochSel}` : '';
     const base = state.tour.on && state.tour.name ? slug(state.tour.name) : slug(state.course);
     const pre = (T.brand || '').trim() ? slug(T.brand) : 'scorecard';
-    const filename = `${pre}_${base}_${state.date || 'runde'}_${FMT_NAME[fmt]}${extra}.png`;
+    const filename = `${pre}_${base}_${state.date || t('runde')}_${FMT_NAME[fmt]}${extra}.png`;
     try {
       cv.toBlob((blob) => {
-        if (!blob) { setStatus('Das Bild konnte nicht erzeugt werden. Bitte nochmal versuchen.'); return; }
+        if (!blob) { setStatus(t('Das Bild konnte nicht erzeugt werden. Bitte nochmal versuchen.')); return; }
         downloadBlob(blob, filename);
       }, 'image/png');
-    } catch (e) { setStatus('Das Bild konnte nicht erzeugt werden (Logo aus fremder Quelle?).'); }
+    } catch (e) { setStatus(t('Das Bild konnte nicht erzeugt werden (Logo aus fremder Quelle?).')); }
   });
 
   // ---------- Designs ----------
@@ -1128,7 +1256,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
     oswald: { name: 'Oswald / Source Sans 3', display: '"Oswald", "Arial Narrow", sans-serif', body: '"Source Sans 3", "Segoe UI", sans-serif', load: ['Oswald', 'Source Sans 3'] },
     inter: { name: 'Inter Tight / Inter', display: '"Inter Tight", "Segoe UI", sans-serif', body: '"Inter", "Segoe UI", sans-serif', load: ['Inter Tight', 'Inter'] },
     archivo: { name: 'Archivo Narrow / Archivo', display: '"Archivo Narrow", "Arial Narrow", sans-serif', body: '"Archivo", "Segoe UI", sans-serif', load: ['Archivo Narrow', 'Archivo'] },
-    system: { name: 'Systemschrift (offline)', display: '"Arial Narrow", "Segoe UI", sans-serif', body: '"Segoe UI", system-ui, sans-serif', load: [] }
+    system: { name: t('Systemschrift (offline)'), display: '"Arial Narrow", "Segoe UI", sans-serif', body: '"Segoe UI", system-ui, sans-serif', load: [] }
   };
   window.SCORECARD_FONTS = FONTS;
   const FALLBACK_THEME = {
@@ -1164,7 +1292,7 @@ table.holes[data-mode="match"] .c-len { display: none; }
   let own = (() => { try { const a = JSON.parse(localStorage.getItem(THEME_KEY) || '[]'); return Array.isArray(a) ? a.filter(t => t && t.id && t.colors) : []; } catch (e) { return []; } })();
   function saveOwn() {
     try { localStorage.setItem(THEME_KEY, JSON.stringify(own)); return true; }
-    catch (e) { setStatus('Das Design ist zu groß für den Browser-Speicher (meist das Logo). Bitte ein kleineres Logo wählen.'); return false; }
+    catch (e) { setStatus(t('Das Design ist zu groß für den Browser-Speicher (meist das Logo). Bitte ein kleineres Logo wählen.')); return false; }
   }
   const allThemes = () => BUILTIN.concat(own);
   const themeById = (id) => allThemes().find(t => t.id === id) || BUILTIN[0];
@@ -1219,9 +1347,9 @@ table.holes[data-mode="match"] .c-len { display: none; }
   // --- Design-Editor ---
   function fillThemeSelect() {
     const sel = $('theme');
-    const opt = (t) => `<option value="${t.id}">${String(t.name || 'Ohne Namen').replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</option>`;
-    sel.innerHTML = `<optgroup label="Vorlagen">${BUILTIN.map(opt).join('')}</optgroup>` +
-      (own.length ? `<optgroup label="Eigene Designs">${own.map(opt).join('')}</optgroup>` : '');
+    const opt = (d) => `<option value="${d.id}">${String((d.builtin ? t(d.name) : d.name) || t('Ohne Namen')).replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</option>`;
+    sel.innerHTML = `<optgroup label="${t('Vorlagen')}">${BUILTIN.map(opt).join('')}</optgroup>` +
+      (own.length ? `<optgroup label="${t('Eigene Designs')}">${own.map(opt).join('')}</optgroup>` : '');
     sel.value = T.id;
   }
   function fillDesign() {
@@ -1237,22 +1365,22 @@ table.holes[data-mode="match"] .c-len { display: none; }
     $('btn-theme-delete').hidden = !!T.builtin;
     $('btn-logo-clear').disabled = !T.logo;
     $('theme-hint').textContent = T.builtin
-      ? 'Vorlage: Änderungen werden automatisch als eigenes Design gespeichert, die Vorlage bleibt unverändert.'
-      : 'Eigenes Design: Änderungen werden sofort gespeichert. Mit „Exportieren“ als Datei sichern oder weitergeben.';
+      ? t('Vorlage: Änderungen werden automatisch als eigenes Design gespeichert, die Vorlage bleibt unverändert.')
+      : t('Eigenes Design: Änderungen werden sofort gespeichert. Mit „Exportieren“ als Datei sichern oder weitergeben.');
   }
   const newId = () => 'own-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   // Änderung am aktuellen Design; eine Vorlage wird dabei zuerst kopiert
   function editTheme(mutate) {
-    let t = T;
-    if (t.builtin) {
-      t = clone(t); delete t.builtin;
-      t.id = newId(); t.name = `${T.name} (eigenes)`;
-      own.push(t);
-      state.themeId = t.id; save();
+    let d = T;
+    if (d.builtin) {
+      d = clone(d); delete d.builtin;
+      d.id = newId(); d.name = t('{name} (eigenes)', { name: t(T.name) });
+      own.push(d);
+      state.themeId = d.id; save();
     }
-    mutate(t);
+    mutate(d);
     saveOwn();
-    applyTheme(t);
+    applyTheme(d);
   }
   $('theme').addEventListener('change', (e) => { state.themeId = e.target.value; save(); applyTheme(themeById(state.themeId)); setStatus(''); });
   $('t-name').addEventListener('input', (e) => { const v = e.target.value; editTheme(t => { t.name = v; }); $('t-name').focus(); });
@@ -1282,9 +1410,9 @@ table.holes[data-mode="match"] .c-len { display: none; }
         c.getContext('2d').drawImage(im, ((im.naturalWidth || k) - k) / 2, ((im.naturalHeight || k) - k) / 2, k, k, 0, 0, N, N);
         const url = c.toDataURL('image/png');
         editTheme(t => { t.logo = url; });
-        setStatus('Logo übernommen.', true);
+        setStatus(t('Logo übernommen.'), true);
       };
-      im.onerror = () => setStatus('Das Bild konnte nicht gelesen werden.');
+      im.onerror = () => setStatus(t('Das Bild konnte nicht gelesen werden.'));
       im.src = rd.result;
     };
     rd.readAsDataURL(f);
@@ -1294,15 +1422,15 @@ table.holes[data-mode="match"] .c-len { display: none; }
     if (T.builtin) return;
     const b = e.currentTarget;
     if (!delArmed) {
-      b.textContent = 'Wirklich löschen?';
-      delArmed = setTimeout(() => { b.textContent = 'Design löschen'; delArmed = null; }, 3500);
+      b.textContent = t('Wirklich löschen?');
+      delArmed = setTimeout(() => { b.textContent = t('Design löschen'); delArmed = null; }, 3500);
       return;
     }
-    clearTimeout(delArmed); delArmed = null; b.textContent = 'Design löschen';
+    clearTimeout(delArmed); delArmed = null; b.textContent = t('Design löschen');
     own = own.filter(t => t.id !== T.id); saveOwn();
     state.themeId = BUILTIN[0].id; save();
     applyTheme(BUILTIN[0]);
-    setStatus('Design gelöscht.');
+    setStatus(t('Design gelöscht.'));
   });
   $('btn-theme-export').addEventListener('click', () => {
     const t = clone(T); delete t.builtin;
@@ -1318,8 +1446,8 @@ table.holes[data-mode="match"] .c-len { display: none; }
     f.text().then((txt) => {
       const d = JSON.parse(txt);
       if (!d || typeof d !== 'object' || !d.colors || !BASE_COLORS.every(k => HEX.test(d.colors[k] || ''))) throw new Error('format');
-      const t = {
-        id: newId(), name: String(d.name || 'Importiertes Design').slice(0, 40),
+      const nt = {
+        id: newId(), name: String(d.name || t('Importiertes Design')).slice(0, 40),
         colors: Object.fromEntries(Object.entries(d.colors).filter(([k, v]) => BASE_COLORS.concat(DERIVED).includes(k) && HEX.test(v))),
         fonts: FONTS[d.fonts] ? d.fonts : 'barlow',
         background: ['fairway', 'stripes', 'plain'].includes(d.background) ? d.background : 'plain',
@@ -1327,15 +1455,16 @@ table.holes[data-mode="match"] .c-len { display: none; }
         brand: String(d.brand || '').slice(0, 28), handle: String(d.handle || '').slice(0, 32),
         logo: typeof d.logo === 'string' && /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(d.logo) ? d.logo : null
       };
-      own.push(t);
+      own.push(nt);
       if (!saveOwn()) { own.pop(); return; }
-      state.themeId = t.id; save();
-      applyTheme(t);
-      setStatus(`Design „${t.name}“ importiert.`, true);
-    }).catch(() => setStatus('Diese Datei ist kein Scorecard-Design (JSON aus „Exportieren“).'));
+      state.themeId = nt.id; save();
+      applyTheme(nt);
+      setStatus(t('Design „{name}“ importiert.', { name: nt.name }), true);
+    }).catch(() => setStatus(t('Diese Datei ist kein Scorecard-Design (JSON aus „Exportieren“).')));
   });
 
   // ---------- Start ----------
+  translatePage();
   buildRows();
   fillForm();
   // Link-Parameter, z. B. studio.html#theme=minimal&fmt=story

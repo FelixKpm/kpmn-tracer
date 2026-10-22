@@ -29,6 +29,7 @@ from kpmn_tracer.gui.panels import TOOLS, ShotPanel, StylePanel, TextPanel
 from kpmn_tracer.gui.timeline import Marker, Timeline
 from kpmn_tracer.gui.video_view import Handle, VideoView
 from kpmn_tracer.gui.workers import TaskRunner
+from kpmn_tracer.i18n import language, set_language, tr
 from kpmn_tracer.io.export import ExportSettings, export
 from kpmn_tracer.project.presets import PositionPreset, PresetStore
 from kpmn_tracer.project.project_file import Project
@@ -109,7 +110,7 @@ class MainWindow(QMainWindow):
                                ("last", "⏭", "Ende (Ende)")):
             b = QToolButton()
             b.setText(text)
-            b.setToolTip(tip)
+            b.setToolTip(native(tr(tip)))
             b.setMinimumWidth(36)
             transport.addWidget(b)
             self.btn[key] = b
@@ -117,10 +118,10 @@ class MainWindow(QMainWindow):
         self.frame_label.setMinimumWidth(260)
         transport.addWidget(self.frame_label)
         transport.addStretch(1)
-        self.still_btn = QPushButton("Bild…")
-        self.still_btn.setToolTip(native("Aktuellen Frame mit Tracer als Bild speichern (Strg+Umschalt+E)"))
+        self.still_btn = QPushButton(tr("Bild…"))
+        self.still_btn.setToolTip(native(tr("Aktuellen Frame mit Tracer als Bild speichern (Strg+Umschalt+E)")))
         transport.addWidget(self.still_btn)
-        self.export_btn = QPushButton("Exportieren…")
+        self.export_btn = QPushButton(tr("Exportieren…"))
         transport.addWidget(self.export_btn)
         v.addLayout(transport)
         v.addWidget(self.timeline)
@@ -141,7 +142,7 @@ class MainWindow(QMainWindow):
         self.side_scroll = scroll
         from PySide6.QtWidgets import QDockWidget
 
-        dock = QDockWidget("Bearbeiten", self)
+        dock = QDockWidget(tr("Bearbeiten"), self)
         dock.setObjectName("edit_dock")
         dock.setWidget(scroll)
         dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
@@ -154,9 +155,9 @@ class MainWindow(QMainWindow):
 
     def _build_actions(self) -> None:
         m = self.menuBar()
-        filem = m.addMenu("&Datei")
-        editm = m.addMenu("&Bearbeiten")
-        viewm = m.addMenu("&Ansicht")
+        filem = m.addMenu(tr("&Datei"))
+        editm = m.addMenu(tr("&Bearbeiten"))
+        viewm = m.addMenu(tr("&Ansicht"))
 
         def act(menu, text: str, slot, shortcut: str | QKeySequence | None = None) -> QAction:
             a = QAction(text, self)
@@ -167,48 +168,48 @@ class MainWindow(QMainWindow):
             self.addAction(a)
             return a
 
-        act(filem, "Clip öffnen…", self.open_dialog, QKeySequence.StandardKey.Open)
-        act(filem, "Batch / Range-Session…", self.open_batch, "Ctrl+B")
-        self.a_save = act(filem, "Projekt speichern", self.save, QKeySequence.StandardKey.Save)
-        self.a_export = act(filem, "Exportieren…", self.export_dialog, "Ctrl+E")
-        self.a_still = act(filem, "Frame als Bild speichern…", self.save_still_dialog, "Ctrl+Shift+E")
+        act(filem, tr("Clip öffnen…"), self.open_dialog, QKeySequence.StandardKey.Open)
+        act(filem, tr("Batch / Range-Session…"), self.open_batch, "Ctrl+B")
+        self.a_save = act(filem, tr("Projekt speichern"), self.save, QKeySequence.StandardKey.Save)
+        self.a_export = act(filem, tr("Exportieren…"), self.export_dialog, "Ctrl+E")
+        self.a_still = act(filem, tr("Frame als Bild speichern…"), self.save_still_dialog, "Ctrl+Shift+E")
         filem.addSeparator()
-        self.a_reset = act(filem, "Projekt zurücksetzen…", self.reset_project, None)
+        self.a_reset = act(filem, tr("Projekt zurücksetzen…"), self.reset_project, None)
         filem.addSeparator()
         # macOS moves these into the application menu ("KPMN Tracer › Einstellungen…/Beenden")
-        act(filem, "Einstellungen…", self.open_settings, "Ctrl+,").setMenuRole(QAction.MenuRole.PreferencesRole)
-        act(filem, "Beenden", self.close, "Ctrl+Q").setMenuRole(QAction.MenuRole.QuitRole)
-        extram = m.addMenu("E&xtras")
-        act(extram, "Scorecard Studio öffnen", self.open_scorecard_studio, None)
-        helpm = m.addMenu("&Hilfe")
-        act(helpm, "Tastenkürzel", self.show_shortcuts, "F1")
-        act(helpm, "Einführungstour", self.start_tour, None)
-        self.a_undo = act(editm, "Rückgängig", self.undo, QKeySequence.StandardKey.Undo)
-        self.a_redo = act(editm, "Wiederholen", self.redo, QKeySequence.StandardKey.Redo)
+        act(filem, tr("Einstellungen…"), self.open_settings, "Ctrl+,").setMenuRole(QAction.MenuRole.PreferencesRole)
+        act(filem, tr("Beenden"), self.close, "Ctrl+Q").setMenuRole(QAction.MenuRole.QuitRole)
+        extram = m.addMenu(tr("E&xtras"))
+        act(extram, tr("Scorecard Studio öffnen"), self.open_scorecard_studio, None)
+        helpm = m.addMenu(tr("&Hilfe"))
+        act(helpm, tr("Tastenkürzel"), self.show_shortcuts, "F1")
+        act(helpm, tr("Einführungstour"), self.start_tour, None)
+        self.a_undo = act(editm, tr("Rückgängig"), self.undo, QKeySequence.StandardKey.Undo)
+        self.a_redo = act(editm, tr("Wiederholen"), self.redo, QKeySequence.StandardKey.Redo)
         editm.addSeparator()
-        act(editm, "Neuer Schlag (Impact = Frame)", self.add_shot, "N")
-        act(editm, "Ballposition vom letzten Clip übernehmen", self.apply_last_position, None)
-        act(editm, "Impact = aktueller Frame", self.set_impact, "I")
-        act(editm, "Schlag bestätigen / aufheben", self.toggle_confirm, "C")
-        act(editm, "Landung = aktueller Frame", self.set_land_frame, "O")
-        act(editm, "Ausgewählten Punkt löschen", self.delete_selected, QKeySequence.StandardKey.Delete)
-        act(editm, "Kamera tracken", lambda: self.track_camera(False), "T")
-        act(editm, "„Ball hier“-Punkte entfernen", self.clear_pins, None)
-        act(editm, "Impacts erkennen", self.detect_impacts, "D")
-        act(editm, "Ball automatisch tracken", self.auto_track_shot, "B")
+        act(editm, tr("Neuer Schlag (Impact = Frame)"), self.add_shot, "N")
+        act(editm, tr("Ballposition vom letzten Clip übernehmen"), self.apply_last_position, None)
+        act(editm, tr("Impact = aktueller Frame"), self.set_impact, "I")
+        act(editm, tr("Schlag bestätigen / aufheben"), self.toggle_confirm, "C")
+        act(editm, tr("Landung = aktueller Frame"), self.set_land_frame, "O")
+        act(editm, tr("Ausgewählten Punkt löschen"), self.delete_selected, QKeySequence.StandardKey.Delete)
+        act(editm, tr("Kamera tracken"), lambda: self.track_camera(False), "T")
+        act(editm, tr("„Ball hier“-Punkte entfernen"), self.clear_pins, None)
+        act(editm, tr("Impacts erkennen"), self.detect_impacts, "D")
+        act(editm, tr("Ball automatisch tracken"), self.auto_track_shot, "B")
         for key, text, sc, _tip in TOOLS:
-            act(editm, f"Werkzeug: {text}", lambda _c=False, k=key: self.set_tool(k), sc)
-        act(viewm, "Ansicht einpassen", self.view.reset_view, "F")
-        act(viewm, "Frame vor", lambda: self.step(1), "Right")
-        act(viewm, "Frame zurück", lambda: self.step(-1), "Left")
-        act(viewm, "10 Frames vor", lambda: self.step(10), "Shift+Right")
-        act(viewm, "10 Frames zurück", lambda: self.step(-10), "Shift+Left")
-        act(viewm, "Abspielen / Pause", self.toggle_play, "Space")
-        act(viewm, "Zum Anfang", lambda: self.goto(0), "Ctrl+Home")
-        act(viewm, "Zum Ende", lambda: self.goto(10**9), "Ctrl+End")
-        act(viewm, "Zum Impact", self.jump_impact, "Home")
-        act(viewm, "Nächster Schlag", lambda: self.select_shot(self.shot_idx + 1, jump=True), "Ctrl+Right")
-        act(viewm, "Vorheriger Schlag", lambda: self.select_shot(self.shot_idx - 1, jump=True), "Ctrl+Left")
+            act(editm, tr("Werkzeug: {tool}", tool=tr(text)), lambda _c=False, k=key: self.set_tool(k), sc)
+        act(viewm, tr("Ansicht einpassen"), self.view.reset_view, "F")
+        act(viewm, tr("Frame vor"), lambda: self.step(1), "Right")
+        act(viewm, tr("Frame zurück"), lambda: self.step(-1), "Left")
+        act(viewm, tr("10 Frames vor"), lambda: self.step(10), "Shift+Right")
+        act(viewm, tr("10 Frames zurück"), lambda: self.step(-10), "Shift+Left")
+        act(viewm, tr("Abspielen / Pause"), self.toggle_play, "Space")
+        act(viewm, tr("Zum Anfang"), lambda: self.goto(0), "Ctrl+Home")
+        act(viewm, tr("Zum Ende"), lambda: self.goto(10**9), "Ctrl+End")
+        act(viewm, tr("Zum Impact"), self.jump_impact, "Home")
+        act(viewm, tr("Nächster Schlag"), lambda: self.select_shot(self.shot_idx + 1, jump=True), "Ctrl+Right")
+        act(viewm, tr("Vorheriger Schlag"), lambda: self.select_shot(self.shot_idx - 1, jump=True), "Ctrl+Left")
 
     def _connect(self) -> None:
         b = self.btn
@@ -252,7 +253,7 @@ class MainWindow(QMainWindow):
 
     # ================================================================ loading
     def open_dialog(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Clip öffnen", "", VIDEO_FILTER)
+        path, _ = QFileDialog.getOpenFileName(self, tr("Clip öffnen"), "", tr(VIDEO_FILTER))
         if path:
             self.open_path(Path(path))
 
@@ -268,8 +269,8 @@ class MainWindow(QMainWindow):
     def open_path(self, path: Path) -> None:
         if not self._maybe_save():
             return
-        dlg = QProgressDialog(f"Analysiere {path.name} …\n(Proxy für die Vorschau wird erstellt)",
-                              "Abbrechen", 0, 1000, self)
+        dlg = QProgressDialog(tr("Analysiere {name} …\n(Proxy für die Vorschau wird erstellt)", name=path.name),
+                              tr("Abbrechen"), 0, 1000, self)
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
         dlg.setMinimumDuration(0)
         mode = self.defaults.vfr_mode
@@ -277,7 +278,7 @@ class MainWindow(QMainWindow):
         worker.progress.connect(lambda f: dlg.setValue(int(f * 1000)))
         dlg.canceled.connect(worker.cancel)
         worker.finished.connect(lambda s: (dlg.close(), self.set_session(s)))
-        worker.failed.connect(lambda msg: (dlg.close(), QMessageBox.critical(self, "Fehler beim Öffnen", msg)))
+        worker.failed.connect(lambda msg: (dlg.close(), QMessageBox.critical(self, tr("Fehler beim Öffnen"), msg)))
         worker.cancelled.connect(dlg.close)
 
     def set_session(self, session: ClipSession) -> None:
@@ -299,10 +300,10 @@ class MainWindow(QMainWindow):
         self.status_info.setText(p.video.summary())
         warn = []
         if p.video.is_vfr:
-            warn.append(f"VFR → {p.frame_count} Frames @ {float(p.video.target_fps):.3f} fps "
-                        f"(1:1 wie in Resolve)")
+            warn.append(tr("VFR → {n} Frames @ {fps:.3f} fps (1:1 wie in Resolve)",
+                           n=p.frame_count, fps=float(p.video.target_fps)))
         if p.video.is_hdr:
-            warn.append(f"HDR ({p.video.hdr_format}) – Vorschau in SDR, Original unverändert")
+            warn.append(tr("HDR ({fmt}) – Vorschau in SDR, Original unverändert", fmt=p.video.hdr_format))
         self.status_warn.setText("   ".join(warn))
         p.settings.setdefault("mask_model", self.defaults.mask_model)
         if self._pending_goto is not None:
@@ -316,8 +317,10 @@ class MainWindow(QMainWindow):
         if p.shots or p.ball_start_hint or p.settings.get("impact_candidates"):
             n = len(p.shots)
             self.statusBar().showMessage(
-                f"Gespeichertes Projekt geladen ({n} {'Schlag' if n == 1 else 'Schläge'}). "
-                "Neu anfangen: Datei › Projekt zurücksetzen", 12000)
+                tr("Gespeichertes Projekt geladen (1 Schlag). Neu anfangen: Datei › Projekt zurücksetzen")
+                if n == 1 else
+                tr("Gespeichertes Projekt geladen ({n} Schläge). Neu anfangen: Datei › Projekt zurücksetzen", n=n),
+                12000)
 
     # ================================================================ state helpers
     @property
@@ -386,12 +389,12 @@ class MainWindow(QMainWindow):
             cur = i == self.shot_idx
             land = s.impact_frame + s.flight_frames(p.fps)
             tl.markers.append(Marker(s.impact_frame, QColor(255, 200, 40) if cur else QColor(170, 140, 40),
-                                     "triangle", f"Impact Schlag {i + 1}"))
-            tl.markers.append(Marker(land, QColor(80, 170, 255), "line", f"Landung Schlag {i + 1}"))
+                                     "triangle", tr("Impact Schlag {i}", i=i + 1)))
+            tl.markers.append(Marker(land, QColor(80, 170, 255), "line", tr("Landung Schlag {i}", i=i + 1)))
             if cur:
                 tl.ranges.append((s.impact_frame, int(land), QColor(255, 200, 40, 40)))
                 for o in s.offsets:
-                    tl.markers.append(Marker(o.frame, QColor(255, 120, 40), "diamond", "Korrektur-Keyframe"))
+                    tl.markers.append(Marker(o.frame, QColor(255, 120, 40), "diamond", tr("Korrektur-Keyframe")))
                 if s.camera.mode == "tracked":
                     tl.bad_frames = {s.camera.first_frame + k for k, c in enumerate(s.camera.confidence)
                                      if c < 0.5}
@@ -400,7 +403,8 @@ class MainWindow(QMainWindow):
                 continue
             col = QColor(230, 80, 230) if c.confidence >= 0.5 else QColor(140, 90, 140)
             tl.markers.append(Marker(c.frame, col, "triangle",
-                                     f"Impact-Kandidat {c.confidence:.0%} ({'+'.join(c.sources)})"))
+                                     tr("Impact-Kandidat {conf:.0%} ({src})", conf=c.confidence,
+                                        src="+".join(c.sources))))
         tl.update()
 
     # ================================================================ navigation
@@ -476,7 +480,7 @@ class MainWindow(QMainWindow):
         self.frame_label.setText(f"Frame {self.frame} / {p.frame_count - 1}   {int(t // 60):02d}:{t % 60:05.2f}{rel}")
         conf = ""
         if shot and shot.camera.mode == "tracked" and shot.camera.covers(self.frame):
-            conf = f"Tracking-Konfidenz {shot.camera.conf(self.frame):.0%}"
+            conf = tr("Tracking-Konfidenz {conf:.0%}", conf=shot.camera.conf(self.frame))
         self.view.info_text = conf
 
     def _occlusion_preview(self) -> np.ndarray | None:
@@ -498,7 +502,7 @@ class MainWindow(QMainWindow):
                 continue  # dense auto samples: only show the main anchors
             fp = shot.to_frame(np.array([[a.x, a.y]]), self.frame)
             pp = s.source_to_proxy(fp)[0]
-            color, label = KIND_COLORS[a.kind], KIND_LABELS[a.kind]
+            color, label = KIND_COLORS[a.kind], tr(KIND_LABELS[a.kind])
             if a.kind == AnchorKind.POINT and a.t is not None:
                 color, label = PIN_COLOR, f"+{a.t:.0f}"  # "ball here" pin: frames after impact
             out.append(Handle(f"a{i}", float(pp[0]), float(pp[1]), color, label))
@@ -508,7 +512,7 @@ class MainWindow(QMainWindow):
     def set_tool(self, key: str) -> None:
         self.tool = key
         self.shot_panel.select_tool(key)
-        self.shot_panel.hint.setText(TOOL_HINTS.get(key, ""))
+        self.shot_panel.hint.setText(tr(TOOL_HINTS.get(key, "")))
         self.view.set_placing(key != "select")
 
     def _ensure_shot(self) -> Shot | None:
@@ -547,7 +551,7 @@ class MainWindow(QMainWindow):
         if p is None:
             return
         if pre is None:
-            self.statusBar().showMessage("Noch keine Ballposition gespeichert", 4000)
+            self.statusBar().showMessage(tr("Noch keine Ballposition gespeichert"), 4000)
             return
         shot = self._ensure_shot()
         if shot is None:
@@ -556,7 +560,7 @@ class MainWindow(QMainWindow):
         shot.set_anchor(AnchorKind.START, pre.start[0] * p.width, pre.start[1] * p.height)
         p.ball_start_hint = (pre.start[0] * p.width, pre.start[1] * p.height)
         self.set_tool("apex")
-        self.statusBar().showMessage("Ballposition übernommen – bitte im Impact-Frame prüfen", 6000)
+        self.statusBar().showMessage(tr("Ballposition übernommen – bitte im Impact-Frame prüfen"), 6000)
         self.on_project_changed()
 
     def reset_project(self) -> None:
@@ -565,9 +569,9 @@ class MainWindow(QMainWindow):
         if s is None:
             return
         r = QMessageBox.question(
-            self, "Projekt zurücksetzen",
-            native("Alle Schläge, die markierte Ballposition und die Impact-Kandidaten dieses Clips verwerfen?\n"
-                   "Stil und Text-Einstellungen bleiben erhalten. (Rückgängig mit Strg+Z)"))
+            self, tr("Projekt zurücksetzen"),
+            native(tr("Alle Schläge, die markierte Ballposition und die Impact-Kandidaten dieses Clips verwerfen?\n"
+                      "Stil und Text-Einstellungen bleiben erhalten. (Rückgängig mit Strg+Z)")))
         if r != QMessageBox.StandardButton.Yes:
             return
         self._snapshot()
@@ -582,7 +586,7 @@ class MainWindow(QMainWindow):
         self.set_tool("select")
         self.dirty = True
         self.on_project_changed()
-        self.statusBar().showMessage("Projekt zurückgesetzt", 4000)
+        self.statusBar().showMessage(tr("Projekt zurückgesetzt"), 4000)
 
     def delete_shot(self) -> None:
         p, shot = self.project, self.current_shot()
@@ -608,7 +612,7 @@ class MainWindow(QMainWindow):
     def set_land_frame(self) -> None:
         shot = self.current_shot()
         if shot is None or self.frame <= shot.impact_frame:
-            self.statusBar().showMessage("Lande-Frame muss nach dem Impact liegen", 3000)
+            self.statusBar().showMessage(tr("Lande-Frame muss nach dem Impact liegen"), 3000)
             return
         self._snapshot()
         shot.land_frame = float(self.frame)
@@ -657,7 +661,7 @@ class MainWindow(QMainWindow):
             if shot.pin_ball(rx, ry, self.frame, self.project.fps) is None:  # type: ignore[union-attr]
                 self._undo.pop()
                 self.statusBar().showMessage(
-                    "„Ball hier“ geht nur zwischen Impact und Landung eines vollständigen Tracers", 4000)
+                    tr("„Ball hier“ geht nur zwischen Impact und Landung eines vollständigen Tracers"), 4000)
                 return
         else:
             rx, ry = self._click_to_ref(shot, x, y)
@@ -801,7 +805,7 @@ class MainWindow(QMainWindow):
 
         sess = self.session
         use_mask = bool(sess.project.settings.get("use_person_mask", True))
-        prog = QProgressDialog("Personen-Maske + Kamera-Tracking …", "Abbrechen", 0, 1000, self)
+        prog = QProgressDialog(tr("Personen-Maske + Kamera-Tracking …"), tr("Abbrechen"), 0, 1000, self)
         prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(300)
 
@@ -835,12 +839,12 @@ class MainWindow(QMainWindow):
                 return
             self._snapshot()
             shot.camera = cam
-            msg = "Stativ erkannt" if cam.mode == "tripod" else "Kamera getrackt"
+            msg = tr("Stativ erkannt") if cam.mode == "tripod" else tr("Kamera getrackt")
             self.statusBar().showMessage(msg, 5000)
             self.on_project_changed()
 
         task.finished.connect(done)
-        task.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, "Tracking fehlgeschlagen", msg)))
+        task.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, tr("Tracking fehlgeschlagen"), msg)))
         task.cancelled.connect(prog.close)
 
     def compute_masks_for_shot(self) -> None:
@@ -854,14 +858,14 @@ class MainWindow(QMainWindow):
         if _has_masks(self._masks, a, b):
             self.refresh()
             return
-        prog = QProgressDialog("Personen-Maske wird berechnet …", "Abbrechen", 0, 1000, self)
+        prog = QProgressDialog(tr("Personen-Maske wird berechnet …"), tr("Abbrechen"), 0, 1000, self)
         prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(300)
         task = self.tasks.start(lambda pr, cancel: compute_masks(sess, a, b, progress=pr, cancel=cancel))
         task.progress.connect(lambda f: prog.setValue(int(f * 1000)))
         prog.canceled.connect(task.cancel)
         task.finished.connect(lambda m: (prog.close(), setattr(self, "_masks", m), self.refresh()))
-        task.failed.connect(lambda msg: (prog.close(), QMessageBox.warning(self, "Personen-Maske", msg)))
+        task.failed.connect(lambda msg: (prog.close(), QMessageBox.warning(self, tr("Personen-Maske"), msg)))
         task.cancelled.connect(prog.close)
 
     # ================================================================ impacts
@@ -897,7 +901,7 @@ class MainWindow(QMainWindow):
 
         sess = self.session
         hint, hint_frame = self._ball_hint()
-        prog = QProgressDialog("Impacts werden gesucht …", "Abbrechen", 0, 1000, self)
+        prog = QProgressDialog(tr("Impacts werden gesucht …"), tr("Abbrechen"), 0, 1000, self)
         prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(300)
         task = self.tasks.start(
@@ -910,13 +914,14 @@ class MainWindow(QMainWindow):
             self._snapshot()
             sess.project.settings["impact_candidates"] = [c.to_dict() for c in cands]
             sure = sum(c.confidence >= 0.5 for c in cands)
-            src = "Audio + Video" if hint else "nur Audio (Ball nicht markiert)"
-            self.shot_panel.auto_status.setText(f"{len(cands)} Kandidaten, {sure} sicher – {src}. "
-                                                "Magenta-Marker in der Timeline anklicken.")
+            src = tr("Audio + Video") if hint else tr("nur Audio (Ball nicht markiert)")
+            self.shot_panel.auto_status.setText(
+                tr("{n} Kandidaten, {sure} sicher – {src}. Magenta-Marker in der Timeline anklicken.",
+                   n=len(cands), sure=sure, src=src))
             self.on_project_changed()
 
         task.finished.connect(done)
-        task.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, "Impact-Erkennung", msg)))
+        task.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, tr("Impact-Erkennung"), msg)))
         task.cancelled.connect(prog.close)
 
     def _shot_from_candidate(self, c) -> Shot:
@@ -938,7 +943,7 @@ class MainWindow(QMainWindow):
         p = self.project
         cands = self._open_candidates()
         if p is None or not cands:
-            self.statusBar().showMessage("Kein offener Impact-Kandidat", 3000)
+            self.statusBar().showMessage(tr("Kein offener Impact-Kandidat"), 3000)
             return
         c = min(cands, key=lambda c: abs(c.frame - self.frame))
         self._snapshot()
@@ -956,19 +961,19 @@ class MainWindow(QMainWindow):
             return
         new = [c for c in self._open_candidates() if c.confidence >= 0.5]
         if not new:
-            self.statusBar().showMessage("Keine neuen sicheren Kandidaten", 3000)
+            self.statusBar().showMessage(tr("Keine neuen sicheren Kandidaten"), 3000)
             return
         self._snapshot()
         for c in new:
             p.shots.append(self._shot_from_candidate(c))
         p.shots.sort(key=lambda s: s.impact_frame)
         self.shot_idx = 0
-        self.statusBar().showMessage(f"{len(new)} Schläge angelegt", 4000)
+        self.statusBar().showMessage(tr("{n} Schläge angelegt", n=len(new)), 4000)
         self.on_project_changed()
 
     # ================================================================ auto tracking
     def _run_task(self, title: str, fn, done) -> None:
-        prog = QProgressDialog(title, "Abbrechen", 0, 1000, self)
+        prog = QProgressDialog(title, tr("Abbrechen"), 0, 1000, self)
         prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(300)
         task = self.tasks.start(fn)
@@ -990,11 +995,11 @@ class MainWindow(QMainWindow):
     def auto_track_shot(self) -> None:
         shot, sess = self.current_shot(), self.session
         if shot is None or sess is None:
-            self.statusBar().showMessage("Erst einen Schlag anlegen (N) und den Ball markieren", 4000)
+            self.statusBar().showMessage(tr("Erst einen Schlag anlegen (N) und den Ball markieren"), 4000)
             return
         if shot.anchor(AnchorKind.START) is None and sess.project.ball_start_hint is None:
-            QMessageBox.information(self, "Ball tracken",
-                                    "Bitte im Impact-Frame zuerst mit „Start“ auf den Ball klicken.")
+            QMessageBox.information(self, tr("Ball tracken"),
+                                    tr("Bitte im Impact-Frame zuerst mit „Start“ auf den Ball klicken."))
             return
         from kpmn_tracer.analysis import analyze_shot
 
@@ -1012,17 +1017,18 @@ class MainWindow(QMainWindow):
 
             self._masks = load_masks(sess)
             if result is None:
-                msg = "Ball nicht gefunden – Punkte vorbefüllt, bitte von Hand setzen"
+                msg = tr("Ball nicht gefunden – Punkte vorbefüllt, bitte von Hand setzen")
             elif result.confidence < 0.5:
-                msg = f"Unsicher ({result.confidence:.0%}) – Start/Apex/Landung vorbefüllt, bitte prüfen"
+                msg = tr("Unsicher ({conf:.0%}) – Start/Apex/Landung vorbefüllt, bitte prüfen", conf=result.confidence)
             else:
-                msg = f"Ball getrackt: {result.n_detections} Detektionen, Konfidenz {result.confidence:.0%}"
+                msg = tr("Ball getrackt: {n} Detektionen, Konfidenz {conf:.0%}", n=result.n_detections,
+                         conf=result.confidence)
             self.statusBar().showMessage(msg, 8000)
             self.shot_panel.auto_status.setText(msg)
             self.set_tool("select")
             self.on_project_changed()
 
-        self._run_task("Ball wird getrackt …",
+        self._run_task(tr("Ball wird getrackt …"),
                        lambda pr, cancel: analyze_shot(sess, work, opts, pr, cancel), done)
 
     def analyze_whole_clip(self) -> None:
@@ -1033,9 +1039,9 @@ class MainWindow(QMainWindow):
 
         hint, hint_frame = self._ball_hint()
         if hint is None:
-            QMessageBox.information(self, "Clip analysieren",
-                                    "Bitte zuerst in einem Frame mit ruhendem Ball einen Schlag anlegen (N) "
-                                    "und mit „Start“ auf den Ball klicken.")
+            QMessageBox.information(self, tr("Clip analysieren"),
+                                    tr("Bitte zuerst in einem Frame mit ruhendem Ball einen Schlag anlegen (N) "
+                                       "und mit „Start“ auf den Ball klicken."))
             return
         opts = self._analysis_options()
         self._snapshot()
@@ -1047,13 +1053,13 @@ class MainWindow(QMainWindow):
             # drop the helper shot used only to mark the ball if it has no landing
             sess.project.shots = [s for s in sess.project.shots if s.is_complete() or s in new]
             ok = sum((s.confidence or 0) >= 0.5 for s in new)
-            msg = f"{len(new)} Schläge analysiert, {ok} sicher"
+            msg = tr("{n} Schläge analysiert, {ok} sicher", n=len(new), ok=ok)
             self.statusBar().showMessage(msg, 8000)
             self.shot_panel.auto_status.setText(msg)
             self.shot_idx = 0 if sess.project.shots else -1
             self.on_project_changed()
 
-        self._run_task("Clip wird analysiert …",
+        self._run_task(tr("Clip wird analysiert …"),
                        lambda pr, cancel: analyze_clip(sess, hint, hint_frame, opts, progress=pr, cancel=cancel),
                        done)
 
@@ -1072,11 +1078,11 @@ class MainWindow(QMainWindow):
         try:
             path = self.session.save()
         except OSError as exc:
-            QMessageBox.critical(self, "Speichern fehlgeschlagen", str(exc))
+            QMessageBox.critical(self, tr("Speichern fehlgeschlagen"), str(exc))
             return False
         self.dirty = False
         self._remember_position()
-        self.statusBar().showMessage(f"Gespeichert: {path.name}", 4000)
+        self.statusBar().showMessage(tr("Gespeichert: {name}", name=path.name), 4000)
         return True
 
     def _remember_position(self) -> None:
@@ -1099,7 +1105,7 @@ class MainWindow(QMainWindow):
     def _maybe_save(self) -> bool:
         if not self.dirty:
             return True
-        r = QMessageBox.question(self, "Änderungen speichern?", "Das Projekt wurde geändert. Speichern?",
+        r = QMessageBox.question(self, tr("Änderungen speichern?"), tr("Das Projekt wurde geändert. Speichern?"),
                                  QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
                                  | QMessageBox.StandardButton.Cancel)
         if r == QMessageBox.StandardButton.Cancel:
@@ -1113,7 +1119,7 @@ class MainWindow(QMainWindow):
         if p is None:
             return
         if not any(s.is_complete() for s in p.shots):
-            QMessageBox.information(self, "Export", "Noch kein vollständiger Tracer (Start + Landung) gesetzt.")
+            QMessageBox.information(self, tr("Export"), tr("Noch kein vollständiger Tracer (Start + Landung) gesetzt."))
             return
         dlg = ExportDialog(p, self.defaults.export_format, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
@@ -1129,7 +1135,7 @@ class MainWindow(QMainWindow):
 
         p = s.project
         start = str(default_still_path(p, self.frame, self.defaults.extra.get("still_ext", ".jpg")))
-        path, _ = QFileDialog.getSaveFileName(self, "Frame als Bild speichern", start,
+        path, _ = QFileDialog.getSaveFileName(self, tr("Frame als Bild speichern"), start,
                                               "JPEG (*.jpg);;PNG (*.png)")
         if not path:
             return
@@ -1151,20 +1157,21 @@ class MainWindow(QMainWindow):
                 occl = occlusion_for_session(s, cancel=cancel)
             return save_still(snapshot, frame, out, occl)
 
-        self._run_task("Bild wird gespeichert …", job,
-                       lambda o: self.statusBar().showMessage(f"Bild gespeichert: {o}", 10000))
+        self._run_task(tr("Bild wird gespeichert …"), job,
+                       lambda o: self.statusBar().showMessage(tr("Bild gespeichert: {path}", path=o), 10000))
 
     def open_scorecard_studio(self) -> None:
         from kpmn_tracer.scorecard import open_studio
 
         if not open_studio():
-            QMessageBox.warning(self, "Scorecard Studio", "Der Browser konnte nicht geöffnet werden.")
+            QMessageBox.warning(self, tr("Scorecard Studio"), tr("Der Browser konnte nicht geöffnet werden."))
 
     def run_export(self, settings: ExportSettings) -> None:
         assert self.session is not None
         snapshot = Project.from_dict(self.session.project.to_dict())
         sess = self.session
-        prog = QProgressDialog(f"Exportiere {EXPORT_LABELS[settings.fmt]} …", "Abbrechen", 0, 1000, self)
+        prog = QProgressDialog(tr("Exportiere {fmt} …", fmt=tr(EXPORT_LABELS[settings.fmt])), tr("Abbrechen"),
+                               0, 1000, self)
         prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(0)
         def job(pr, cancel):
@@ -1179,8 +1186,8 @@ class MainWindow(QMainWindow):
         worker.progress.connect(lambda f: prog.setValue(int(f * 1000)))
         prog.canceled.connect(worker.cancel)
         worker.finished.connect(
-            lambda out: (prog.close(), self.statusBar().showMessage(f"Export fertig: {out}", 10000)))
-        worker.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, "Export fehlgeschlagen", msg)))
+            lambda out: (prog.close(), self.statusBar().showMessage(tr("Export fertig: {path}", path=out), 10000)))
+        worker.failed.connect(lambda msg: (prog.close(), QMessageBox.critical(self, tr("Export fehlgeschlagen"), msg)))
         worker.cancelled.connect(prog.close)
 
     # ================================================================ presets / text / confirm
@@ -1205,17 +1212,17 @@ class MainWindow(QMainWindow):
 
         if self.project is None:
             return
-        name, ok = QInputDialog.getText(self, "Style speichern", "Name des Presets:")
+        name, ok = QInputDialog.getText(self, tr("Style speichern"), tr("Name des Presets:"))
         if ok and name.strip():
             self.store.save_style(name.strip(), self.project.style)
             self.style_panel.set_presets(self.store.style_names(), name.strip())
 
     def delete_style_preset(self) -> None:
-        name = self.style_panel.presets.currentText()
-        if self.store.delete_style(name):
+        name = self.style_panel.presets.currentData()
+        if name and self.store.delete_style(name):
             self.style_panel.set_presets(self.store.style_names())
         else:
-            self.statusBar().showMessage("Eingebaute Presets können nicht gelöscht werden", 3000)
+            self.statusBar().showMessage(tr("Eingebaute Presets können nicht gelöscht werden"), 3000)
 
     def on_text_changed(self) -> None:
         p, shot = self.project, self.current_shot()
@@ -1235,7 +1242,7 @@ class MainWindow(QMainWindow):
             return
         self._snapshot()
         shot.confirmed = not shot.confirmed
-        self.statusBar().showMessage("Schlag bestätigt" if shot.confirmed else "Bestätigung aufgehoben", 3000)
+        self.statusBar().showMessage(tr("Schlag bestätigt") if shot.confirmed else tr("Bestätigung aufgehoben"), 3000)
         self.on_project_changed()
 
     # ================================================================ batch / settings / help
@@ -1273,9 +1280,42 @@ class MainWindow(QMainWindow):
                                              yolo_model=self.defaults.yolo_model,
                                              mask_model=self.defaults.mask_model)
                 self.dirty = True
+            if self.defaults.language != language():
+                self.switch_language(self.defaults.language)
 
-    def start_tour(self) -> None:
-        """Guided tour through the window (automatically once on the first start)."""
+    def switch_language(self, lang: str) -> MainWindow | None:
+        """Rebuild the window in another language; the open clip, edits and undo history move along."""
+        if self.tasks.busy():
+            QMessageBox.information(self, tr("Sprache / Language"),
+                                    tr("Bitte warten, bis die laufende Berechnung fertig ist."))
+            return None
+        set_language(lang)
+        self.defaults.language = lang
+        self.store.save_defaults(self.defaults)
+        new = MainWindow()
+        new.setGeometry(self.geometry())
+        if self.batch_window is not None:
+            self.batch_window.close()
+        if self.session is not None:
+            new.set_session(self.session)
+            new.shot_idx, new.dirty = self.shot_idx, self.dirty
+            new._undo, new._redo, new._masks = self._undo, self._redo, self._masks
+            new.goto(self.frame)
+            new.on_project_changed(record=False)
+            self.session = None
+        self.dirty = False
+        new.setWindowState(self.windowState())
+        new.show()
+        self.close()
+        self.deleteLater()
+        return new
+
+    def start_tour(self, index: int = 0) -> None:
+        """Guided tour through the window (automatically once on the first start).
+
+        Step 0 asks for the language; picking another one rebuilds the window and
+        continues the tour there.
+        """
         from kpmn_tracer.gui.tour import TourOverlay, main_window_steps
 
         if getattr(self, "_tour", None) is not None:
@@ -1285,10 +1325,23 @@ class MainWindow(QMainWindow):
         def done(_completed: bool) -> None:
             self._tour = None
             self.defaults.extra["tour_done"] = True
+            self.defaults.language = language()
             self.store.save_defaults(self.defaults)
 
+        def chosen(lang: str) -> None:
+            if lang == language():
+                self.defaults.language = lang
+                self.store.save_defaults(self.defaults)
+                self._tour.show_step(1)
+                return
+            self._tour.finish(False)
+            new = self.switch_language(lang)
+            if new is not None:
+                QTimer.singleShot(200, lambda: new.start_tour(1))
+
         self._tour.finished.connect(done)
-        self._tour.start()
+        self._tour.chosen.connect(chosen)
+        self._tour.start(index)
 
     def maybe_start_tour(self) -> None:
         if not self.defaults.extra.get("tour_done"):
