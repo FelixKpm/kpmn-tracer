@@ -10,6 +10,7 @@ from PySide6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPen, QWheelEve
 from PySide6.QtWidgets import QWidget
 
 from kpmn_tracer.gui.keys import native
+from kpmn_tracer.i18n import tr
 
 HANDLE_RADIUS = 7.0
 
@@ -97,7 +98,7 @@ class VideoView(QWidget):
         if self._img is None:
             p.setPen(QColor(160, 160, 160))
             p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                       native("Clip öffnen (Strg+O) oder Datei hierher ziehen"))
+                       native(tr("Clip öffnen (Strg+O) oder Datei hierher ziehen")))
             return
         w, h = self.image_size()
         o, s = self._origin(), self._scale()
@@ -125,7 +126,7 @@ class VideoView(QWidget):
         if self._zoom != 1.0:
             p.setPen(QColor(200, 200, 200))
             p.drawText(QRectF(0, 6, self.width() - 8, 20), Qt.AlignmentFlag.AlignRight,
-                       f"Zoom {self._zoom:.1f}×  (Doppelklick = einpassen)")
+                       tr("Zoom {z:.1f}×  (Doppelklick = einpassen)", z=self._zoom))
 
     # ------------------------------------------------------------ interaction
     def _handle_at(self, pos: QPointF) -> str | None:

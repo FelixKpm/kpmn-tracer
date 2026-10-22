@@ -11,6 +11,13 @@ Bild zum Posten. Das Original wird nie verändert.
 * Schlagmomente werden über Ton und Video automatisch gefunden
 * Batch-Verarbeitung einer ganzen Range-Session mit Review-Liste
 * Scorecard Studio für Scorecard-Grafiken
+* Oberfläche auf **Deutsch oder Englisch** (Abfrage beim ersten Start, später unter *Einstellungen*)
+
+> **English:** KPMN Tracer adds a TV-style ball tracer to golf videos and exports it as an overlay
+> with alpha (for DaVinci Resolve) or as a finished video/image. The app speaks English too: pick
+> *English* in the first step of the guided tour, or later under *File › Settings › Language*.
+> Download the build for your system from the
+> [releases](https://github.com/FelixKpm/kpmn-tracer/releases) and follow the guided tour.
 
 Status und technische Details: [PROGRESS.md](PROGRESS.md), [DECISIONS.md](DECISIONS.md).
 
@@ -155,7 +162,8 @@ Eigenständiges Werkzeug für Scorecard-Grafiken, unabhängig vom Tracer. Öffne
   Änderungen an einer Vorlage landen automatisch in einem eigenen Design; eigene Designs werden im
   Browser gespeichert und lassen sich als JSON exportieren/importieren (Sicherung, Weitergabe).
 * Eigene Vorlagen für alle: in `kpmn_tracer/scorecard/themes.js` eintragen (Format im Dateikopf).
-* Direktlink auf ein Design/Format: `studio.html#theme=minimal&fmt=story`.
+* Direktlink auf ein Design/Format/Sprache: `studio.html#theme=minimal&fmt=story&lang=en`. Das Studio
+  öffnet sich in der Sprache der App; oben rechts lässt sich zwischen DE und EN wechseln.
 
 ---
 

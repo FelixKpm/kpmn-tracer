@@ -431,3 +431,22 @@ danach ~8 min Analyse. Ursachen und Lösungen:
   statt jeder 2. Frame bei 120 fps) und eine stärkere JPEG-Kompression des Proxys.
 * **Offen:** Mehrere Schläge parallel analysieren (OpenCV gibt den GIL frei) – braucht getrennte
   Reader/Masken-Caches je Schlag.
+
+## D44 – Englische Oberfläche
+Anlass: ein erster Tester spricht kein Deutsch.
+* Die deutschen Texte bleiben im Code und sind die Schlüssel: `tr("Clip öffnen…")` liefert den Text in
+  der gewählten Sprache (`kpmn_tracer/i18n.py`, Englisch in `i18n_en.py`), Platzhalter über
+  `str.format`. Kein Qt-Linguist (`.ts/.qm`-Dateien, eigener Build-Schritt) – für zwei Sprachen und
+  ~300 Texte ist ein Wörterbuch einfacher zu pflegen, und eine fehlende Übersetzung fällt auf Deutsch
+  zurück statt auf einen Schlüssel. Ein Test findet alle `tr()`-Texte (auch über Tabellen wie `TOOLS`)
+  und prüft Vollständigkeit und Platzhalter; ein zweiter sucht im englischen Fenster nach Deutsch.
+* Die Sprache wird beim Start gesetzt (`settings.json`, ohne Wahl: Systemsprache) und im ersten
+  Tour-Schritt abgefragt. Ein Wechsel baut das Hauptfenster neu auf und übergibt die offene Sitzung
+  (Clip, Änderungen, Rückgängig-Verlauf) – einfacher und vollständiger als jedes Widget einzeln neu zu
+  beschriften. Während einer laufenden Berechnung wird nicht gewechselt.
+* Namen der eingebauten Stil-Presets werden nur angezeigt übersetzt; gespeichert wird der deutsche Name.
+* Scorecard Studio: eigenes kleines Wörterbuch im Seitenskript, Sprache aus `#lang=`, sonst zuletzt
+  gewählt, sonst Browsersprache; Umschalter DE/EN oben rechts. Windows öffnet `file://`-Links über die
+  Shell und verliert dabei den `#…`-Teil, deshalb öffnet die App eine kleine Weiterleitungsseite im
+  Temp-Ordner. Gespeicherte Werte (z. B. Abschlagfarbe) bleiben deutsch, nur die Anzeige wechselt.
+* Kommandozeile und Log bleiben wie bisher.

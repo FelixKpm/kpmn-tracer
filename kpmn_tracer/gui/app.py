@@ -22,14 +22,19 @@ def _log_file() -> Path:
     return home() / "kpmn_tracer.log"
 
 
-def _install_file_open_handler(app, win) -> None:
+def _install_file_open_handler(app) -> None:
     """macOS: files opened from the Finder ("Öffnen mit", Drag auf das Dock) arrive as events, not argv."""
     from PySide6.QtCore import QEvent, QObject
+
+    from kpmn_tracer.gui.main_window import MainWindow
 
     class FileOpen(QObject):
         def eventFilter(self, _obj, ev) -> bool:  # noqa: N802 - Qt API
             if ev.type() == QEvent.Type.FileOpen and ev.file():
-                win.open_path(Path(ev.file()))
+                # the current window: a language switch replaces it
+                win = next((w for w in app.topLevelWidgets() if isinstance(w, MainWindow) and w.isVisible()), None)
+                if win is not None:
+                    win.open_path(Path(ev.file()))
                 return True
             return False
 
@@ -48,6 +53,10 @@ def main(argv: list[str] | None = None) -> int:
     app.setStyle("Fusion")
     from kpmn_tracer.gui.main_window import MainWindow
     from kpmn_tracer.gui.theme import apply_dark_palette
+    from kpmn_tracer.i18n import set_language, system_language
+    from kpmn_tracer.project.presets import PresetStore
+
+    set_language(PresetStore().load_defaults().language or system_language())
 
     apply_dark_palette(app)
     icon = _asset("kpmn_tracer.png")
@@ -56,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
 
         app.setWindowIcon(QIcon(str(icon)))
     win = MainWindow()
-    _install_file_open_handler(app, win)
+    _install_file_open_handler(app)
     win.show()
     if smoke:
         from PySide6.QtCore import QTimer
